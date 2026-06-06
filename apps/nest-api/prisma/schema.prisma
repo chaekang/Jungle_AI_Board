@@ -1,0 +1,133 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id          BigInt       @id @default(autoincrement())
+  email       String       @unique
+  passwordHash String      @map("password_hash")
+  nickname    String
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  seatReviews SeatReview[]
+  comments    Comment[]
+
+  @@map("users")
+}
+
+model Theater {
+  id         BigInt       @id @default(autoincrement())
+  name       String       @unique
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+
+  performances Performance[]
+  seatReviews  SeatReview[]
+
+  @@map("theaters")
+}
+
+model Musical {
+  id         BigInt       @id @default(autoincrement())
+  title      String
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+
+  performances Performance[]
+  seatReviews  SeatReview[]
+
+  @@map("musicals")
+}
+
+model Performance {
+  id         BigInt      @id @default(autoincrement())
+  musicalId  BigInt      @map("musical_id")
+  theaterId  BigInt      @map("theater_id")
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+
+  musical    Musical     @relation(fields: [musicalId], references: [id])
+  theater    Theater     @relation(fields: [theaterId], references: [id])
+  seatReviews SeatReview[]
+
+  @@map("performances")
+}
+
+model SeatReview {
+  id                    BigInt      @id @default(autoincrement())
+  authorId              BigInt      @map("author_id")
+  theaterId             BigInt      @map("theater_id")
+  musicalId             BigInt      @map("musical_id")
+  performanceId         BigInt?     @map("performance_id")
+  seatFloor             String      @map("seat_floor")
+  seatSection           String      @map("seat_section")
+  seatRow               String      @map("seat_row")
+  seatNumber            String      @map("seat_number")
+  viewRating            Int         @map("view_rating")
+  soundRating           Int         @map("sound_rating")
+  comfortRating         Int         @map("comfort_rating")
+  expressionRating      Int         @map("expression_rating")
+  stageVisibilityRating Int         @map("stage_visibility_rating")
+  content               String
+  createdAt             DateTime    @default(now()) @map("created_at")
+  updatedAt             DateTime    @updatedAt @map("updated_at")
+
+  author                User        @relation(fields: [authorId], references: [id])
+  theater               Theater     @relation(fields: [theaterId], references: [id])
+  musical               Musical     @relation(fields: [musicalId], references: [id])
+  performance           Performance? @relation(fields: [performanceId], references: [id])
+
+  comments              Comment[]
+  seatReviewTags        SeatReviewTag[]
+
+  @@map("seat_reviews")
+}
+
+model Comment {
+  id           BigInt     @id @default(autoincrement())
+  seatReviewId BigInt     @map("seat_review_id")
+  authorId     BigInt     @map("author_id")
+  content      String
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  seatReview   SeatReview @relation(fields: [seatReviewId], references: [id])
+  author       User       @relation(fields: [authorId], references: [id])
+
+  @@map("comments")
+}
+
+model Tag {
+  id            BigInt          @id @default(autoincrement())
+  name          String
+  type          String
+  createdAt     DateTime        @default(now()) @map("created_at")
+
+  seatReviewTags SeatReviewTag[]
+
+  @@unique([name, type])
+  @@map("tags")
+}
+
+model SeatReviewTag {
+  id           BigInt     @id @default(autoincrement())
+  seatReviewId BigInt     @map("seat_review_id")
+  tagId        BigInt     @map("tag_id")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  seatReview   SeatReview @relation(fields: [seatReviewId], references: [id])
+  tag          Tag        @relation(fields: [tagId], references: [id])
+
+  @@unique([seatReviewId, tagId])
+  @@map("seat_review_tags")
+}
