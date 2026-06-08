@@ -2,7 +2,7 @@
 
 ## 목적
 
-이 문서는 [implementation_order.md](/c:/Jungle/agentic-board/docs/implementation_order.md)의
+이 문서는 [implementation_order.md](../implementation_order.md)의
 `2. 프로젝트 기본 세팅 / DB 설계`를 실제로 진행할 수 있도록
 한 번에 따라가는 작업 가이드로 정리한 문서다.
 
@@ -12,6 +12,10 @@
 - 프론트엔드: `apps/web-react`
 - 데이터베이스: PostgreSQL
 - ORM: Prisma
+
+관련 개념 문서:
+
+- [docs/concept/001_project_setup_and_db_design.md](../concept/001_project_setup_and_db_design.md)
 
 ## 1. 먼저 기준 스택 확정하기
 
@@ -45,8 +49,8 @@
 
 확인 파일:
 
-- [package.json](/c:/Jungle/agentic-board/package.json)
-- [infra/docker-compose.yml](/c:/Jungle/agentic-board/infra/docker-compose.yml)
+- [package.json](/c:/Jungle/Jungle_AI_Board/package.json)
+- [infra/docker-compose.yml](/c:/Jungle/Jungle_AI_Board/infra/docker-compose.yml)
 
 현재 설정 기준 DB 정보:
 
@@ -111,8 +115,8 @@ DB 연결용 패키지가 아직 없다.
 
 확인 파일:
 
-- [apps/nest-api/package.json](/c:/Jungle/agentic-board/apps/nest-api/package.json)
-- [apps/nest-api/src/app.module.ts](/c:/Jungle/agentic-board/apps/nest-api/src/app.module.ts)
+- [apps/nest-api/package.json](/c:/Jungle/Jungle_AI_Board/apps/nest-api/package.json)
+- [apps/nest-api/src/app.module.ts](/c:/Jungle/Jungle_AI_Board/apps/nest-api/src/app.module.ts)
 
 ### 설치 명령어
 
@@ -160,8 +164,8 @@ ERD를 코드로 옮기기 전에 규칙을 먼저 고정해야 한다.
 - 핵심 테이블 기본 시간 컬럼:
   - `created_at`
   - `updated_at`
-- 후기와 댓글은 소프트 삭제 권장:
-  - `is_deleted boolean`
+- 후기와 댓글 삭제 전략은 이번 프로젝트에서 `deleted_at` 기반 소프트 삭제로 고정한다
+- 이유: 후기 수정 이력 확인, 신고 대응, 실수 복구 가능성을 생각하면 초기에 구조를 잡아두는 편이 낫다
 
 ### 평가값 규칙
 
@@ -196,7 +200,7 @@ ERD를 코드로 옮기기 전에 규칙을 먼저 고정해야 한다.
 - [ ] 네이밍 규칙 확정
 - [ ] PK / FK 규칙 확정
 - [ ] 평가값 스케일 확정
-- [ ] 소프트 삭제 적용 대상 확정
+- [ ] 이번 단계 삭제 전략을 `deleted_at` 기반 소프트 삭제로 반영
 - [ ] 방향 값 후보 확정
 
 ## 6. 1차 핵심 테이블 범위 정하기
@@ -243,7 +247,6 @@ MVP에서는 모든 테이블을 한 번에 다 만들 필요는 없다.
 - `visit_date`
 - `revisit_intent`
 - `view_count`
-- `is_deleted`
 
 ### 체크리스트
 
@@ -253,10 +256,16 @@ MVP에서는 모든 테이블을 한 번에 다 만들 필요는 없다.
 - [ ] unique 제약 후보 정리
 - [ ] index 후보 정리
 
-## 7. 2차 확장 테이블 범위 정하기
+## 7. 2차 확장 테이블 범위 정리
+
+이 섹션은 이번 단계에서 전부 구현할 목록은 아니지만,
+ERD와 네이밍을 정할 때 미리 관계 후보를 적어두면 뒤 단계에서 재작업을 줄일 수 있다.
+
+즉 지금 당장 아래 테이블까지 한 번에 모두 만들 필요는 없다.
+다만 어떤 관계를 나중에 붙일지까지는 지금 설계 메모로 남겨두는 편이 좋다.
 
 아래 테이블은 배역/배우 검색과 RAG 정밀도를 높이는 용도라
-1차 이후 추가해도 된다.
+실제 테이블 생성은 관련 단계에서 하되, 1차 스키마와 충돌하지 않게 방향은 지금 잡아두는 편이 안전하다.
 
 - `characters`
 - `actors`
@@ -265,7 +274,7 @@ MVP에서는 모든 테이블을 한 번에 다 만들 필요는 없다.
 - `documents`
 - `embeddings`
 
-### 왜 필요한가
+### 왜 후보로 남겨두는가
 
 - `characters`, `actors`, `performance_casts`
   - 작품 + 배역/배우 질문 대응
@@ -274,7 +283,7 @@ MVP에서는 모든 테이블을 한 번에 다 만들 필요는 없다.
 - `documents`, `embeddings`
   - RAG용 문서/임베딩 파이프라인
 
-### documents에 넣으면 좋은 메타데이터
+### 나중에 `documents`를 도입한다면 넣어볼 메타데이터
 
 - `theater_id`
 - `musical_id`
@@ -290,10 +299,9 @@ MVP에서는 모든 테이블을 한 번에 다 만들 필요는 없다.
 
 ### 체크리스트
 
-- [ ] 2차 확장 테이블 범위 확정
-- [ ] `seat_review_focuses` 유지 여부 확정
-- [ ] `documents.metadata_json` 구성 초안 정리
-- [ ] 임베딩 저장 전략 초안 정리
+- [ ] 2차 확장 후보의 채택 기준 정리
+- [ ] 지금 만들 테이블과 나중에 만들 테이블을 구분
+- [ ] RAG 단계에서 다시 꺼낼 메타데이터 후보만 정리
 
 ## 8. Prisma 초기화와 1차 마이그레이션 준비
 
