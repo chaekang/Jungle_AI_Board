@@ -1,0 +1,63 @@
+import type { SubmitEvent } from "react"
+import "../../styles/components/auth/auth-panel.css"
+import "../../styles/components/auth/login-panel.css"
+
+type LoginPanelProps = {
+  email: string
+  onChangeEmail: (value: string) => void
+  onChangePassword: (value: string) => void
+  onShowSignup: () => void
+  onSubmit: (event: SubmitEvent<HTMLFormElement>) => void | Promise<void>
+  password: string
+}
+
+export default function LoginPanel({
+  email,
+  onChangeEmail,
+  onChangePassword,
+  onShowSignup,
+  onSubmit,
+  password,
+}: LoginPanelProps) {
+  return (
+    <section className="auth-card login-card">
+      <div className="auth-card-head">
+        <p className="auth-kicker">WELCOME BACK</p>
+        <h1 className="auth-title">LOGIN</h1>
+      </div>
+
+      <form className="auth-form" onSubmit={onSubmit}>
+        <label className="auth-field">
+          <span>ID</span>
+          <input
+            type="email"
+            placeholder="email"
+            autoComplete="email"
+            value={email}
+            onChange={(event) => onChangeEmail(event.target.value)}
+          />
+        </label>
+
+        <label className="auth-field">
+          <span>PW</span>
+          <input
+            type="password"
+            placeholder="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => onChangePassword(event.target.value)}
+          />
+        </label>
+
+        <div className="auth-actions stacked">
+          <button type="submit" className="auth-button primary">
+            LOGIN
+          </button>
+          <button type="button" className="auth-button secondary" onClick={onShowSignup}>
+            SIGN UP
+          </button>
+        </div>
+      </form>
+    </section>
+  )
+}
