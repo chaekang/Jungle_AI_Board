@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Post, Query, UseGuards } from "@nestjs/common";
 import { AuthService } from "./auth.service";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
@@ -25,5 +25,21 @@ export class AuthController {
     @UseGuards(JwtAuthGuard)
     getMe(@CurrentUser() user: AuthenticatedUser) {
         return this.authService.getMe(user);
+    }
+
+    @Get('check-email')
+    checkEmail(@Query("email") email?: string) {
+        const normalizedEmail = email?.trim();
+
+        if (!normalizedEmail) {
+            throw new BadRequestException("Email is required");
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(normalizedEmail)) {
+            throw new BadRequestException("Invalid email format");
+        }
+
+        return this.authService.checkEmailAvailability(normalizedEmail);
     }
 }

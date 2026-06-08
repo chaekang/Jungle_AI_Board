@@ -71,4 +71,10 @@ export class AuthService {
 
         return this.usersService.toPublicUser(user);
     }
+
+    async checkEmailAvailability(email: string) {
+        const user = await this.usersService.findByEmail(email)
+
+        return { available: !user }
+    }
 }

@@ -8,3 +8,7 @@ export type LoginResponse = {
   accessToken: string
   user: PublicUser
 }
+
+export type CheckEmailResponse = {
+  available: boolean
+}

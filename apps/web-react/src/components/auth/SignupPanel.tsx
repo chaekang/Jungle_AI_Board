@@ -33,12 +33,12 @@ export default function SignupPanel({
     <section className="auth-card signup-card">
       <div className="auth-card-head">
         <p className="auth-kicker">CREATE ACCOUNT</p>
-        <h1 className="auth-title">SIGN UP</h1>
+        <h1 className="auth-title">회원가입</h1>
       </div>
 
       <form className="auth-form" onSubmit={onSubmit}>
         <label className="auth-field">
-          <span>NAME</span>
+          <span>이름</span>
           <input
             type="text"
             placeholder="nickname"
@@ -65,12 +65,12 @@ export default function SignupPanel({
             className="auth-button mini secondary signup-check-button"
             onClick={onCheckDuplicate}
           >
-            CHECK ID
+            중복 체크
           </button>
         </div>
 
         <label className="auth-field">
-          <span>PW</span>
+          <span>비밀번호</span>
           <input
             type="password"
             placeholder="password"
@@ -81,7 +81,7 @@ export default function SignupPanel({
         </label>
 
         <label className="auth-field">
-          <span>RE-PW</span>
+          <span>비밀번호 확인</span>
           <input
             type="password"
             placeholder="password confirm"
@@ -93,10 +93,10 @@ export default function SignupPanel({
 
         <div className="auth-actions stacked">
           <button type="submit" className="auth-button primary">
-            SUBMIT
+            확인
           </button>
           <button type="button" className="auth-link-button" onClick={onShowLogin}>
-            Back to LOGIN
+            로그인으로 돌아가기
           </button>
         </div>
       </form>

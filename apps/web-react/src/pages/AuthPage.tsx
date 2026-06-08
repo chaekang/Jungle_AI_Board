@@ -3,7 +3,7 @@ import type { SubmitEvent } from "react"
 import LoginPanel from "../components/auth/LoginPanel"
 import SignupPanel from "../components/auth/SignupPanel"
 import "../styles/pages/auth-page.css"
-import type { LoginResponse, PublicUser } from "../types/auth"
+import type { CheckEmailResponse, LoginResponse, PublicUser } from "../types/auth"
 
 const API_BASE = "http://localhost:3000"           // 백엔드 주소
 const TOKEN_KEY = "jungle_ai_board_access_token"   // 브라우저 localStorage에 토큰 저장할 때 쓰는 이름
@@ -150,16 +150,33 @@ export default function AuthPage() {
   }
 
   // 
-  function handleDuplicateCheck() {
+  async function handleDuplicateCheck() {
     setMessage("")
     setError("")
 
-    if (!registerEmail.trim()) {
+    const email  = registerEmail.trim()
+
+    if (!email) {
       setError("Enter an email before checking availability.")
       return
     }
 
-    setMessage("Availability check is a UI placeholder. The server still performs the final validation.")
+    try {
+      const result = await apiRequest<CheckEmailResponse>(
+        `/auth/check-email?email=${encodeURIComponent(email)}`,
+        { method: "GET" },
+      )
+
+      if (result.available) {
+        setMessage("This email is available")
+      }
+      else {
+        setError("This email is already in use")
+      }
+    }
+    catch (err) {
+      setError(err instanceof Error ? err.message : "Email check failed.")
+    }
   }
 
   // 로그아웃
