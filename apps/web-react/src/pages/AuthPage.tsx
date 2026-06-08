@@ -49,6 +49,11 @@ export default function AuthPage() {
   const [loginEmail, setLoginEmail] = useState("")
   const [loginPassword, setLoginPassword] = useState("")
 
+  // 중복 확인
+  const [checkedEmail, setCheckedEmail] = useState("")
+  const [isEmailChecked, setIsEmailChecked] = useState(false)
+  const [isEmailAvailable, setIsEmailAvailable] = useState(false)
+
   // 인증 결과
   const [token, setToken] = useState<string | null>(localStorage.getItem(TOKEN_KEY))   // 로그인 후 받은 JWT, 새로고침해도 저장한 토큰이 있으면 로그인 상태 복구
   const [currentUser, setCurrentUser] = useState<PublicUser | null>(null)    // 현재 로그인한 사용자 정보
@@ -77,26 +82,41 @@ export default function AuthPage() {
       return
     }
 
+    const normalizedEmail = registerEmail.trim()
+
+    if (!isEmailChecked || checkedEmail !== normalizedEmail) {
+      setError("Check email availability before signing up.")
+      return
+    }
+
+    if (!isEmailAvailable) {
+      setError("This email is already in use.")
+      return
+    }
+
     // 백엔드 회원가입 API 호출
     try {
       const user = await apiRequest<PublicUser>("/auth/register", {
         // 해당 JSON 내용으로 회원가입 진행
         method: "POST",
         body: JSON.stringify({
-          email: registerEmail,
+          email: normalizedEmail,
           password: registerPassword,
           nickname: registerName,
         }),
       })
 
       setMessage(`Account created for ${user.nickname}. Please log in.`)
-      setLoginEmail(registerEmail)
+      setLoginEmail(normalizedEmail)
 
       // 입력값 비우기
       setRegisterName("")
       setRegisterEmail("")
       setRegisterPassword("")
       setRegisterPasswordConfirm("")
+      setCheckedEmail("")
+      setIsEmailChecked(false)
+      setIsEmailAvailable(false)
 
       // 로그인 화면으로 이동
       setMode("login")
@@ -149,7 +169,7 @@ export default function AuthPage() {
     }
   }
 
-  // 
+  // 이메일 중복 체크
   async function handleDuplicateCheck() {
     setMessage("")
     setError("")
@@ -158,6 +178,9 @@ export default function AuthPage() {
 
     if (!email) {
       setError("Enter an email before checking availability.")
+      setCheckedEmail("")
+      setIsEmailChecked(false)
+      setIsEmailAvailable(false)
       return
     }
 
@@ -167,16 +190,32 @@ export default function AuthPage() {
         { method: "GET" },
       )
 
+      setCheckedEmail(email)
+      setIsEmailChecked(true)
+
       if (result.available) {
+        setIsEmailAvailable(true)
         setMessage("This email is available")
       }
       else {
+        setIsEmailAvailable(false)
         setError("This email is already in use")
       }
     }
     catch (err) {
+      setCheckedEmail("")
+      setIsEmailChecked(false)
+      setIsEmailAvailable(false)
       setError(err instanceof Error ? err.message : "Email check failed.")
     }
+  }
+
+  function handleRegisterEmailChange(value: string) {
+    setRegisterEmail(value)
+    setCheckedEmail("")
+    setIsEmailAvailable(false)
+    setMessage("")
+    setError("")
   }
 
   // 로그아웃
@@ -225,7 +264,7 @@ export default function AuthPage() {
             <SignupPanel
               email={registerEmail}
               name={registerName}
-              onChangeEmail={setRegisterEmail}
+              onChangeEmail={handleRegisterEmailChange}
               onChangeName={setRegisterName}
               onChangePassword={setRegisterPassword}
               onChangePasswordConfirm={setRegisterPasswordConfirm}
