@@ -60,6 +60,7 @@ model Performance {
   theater    Theater     @relation(fields: [theaterId], references: [id])
   seatReviews SeatReview[]
 
+  @@unique([musicalId, theaterId])
   @@map("performances")
 }
 
