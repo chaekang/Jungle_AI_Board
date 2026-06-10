@@ -693,8 +693,6 @@ import { SeatReviewsModule } from "./seat-reviews/seat-reviews.module";
     MetadataModule,
     SeatReviewsModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}
 ```

@@ -830,22 +830,20 @@ GET /theaters
 
 ```ts
 import { Module } from "@nestjs/common";
-import { AppController } from "./app.controller";
-import { AppService } from "./app.service";
 import { ConfigModule } from "@nestjs/config";
-import { DatabaseModule } from "./database/database.module";
 import { AuthModule } from "./auth/auth.module";
+import { DatabaseModule } from "./database/database.module";
+import { HealthModule } from "./health/health.module";
 import { MetadataModule } from "./metadata/metadata.module";
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     DatabaseModule,
+    HealthModule,
     AuthModule,
     MetadataModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}
 ```
