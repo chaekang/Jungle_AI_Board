@@ -1,5 +1,15 @@
 # 011_seat_selection_agent
 
+## 현재 파일 경로 규칙
+
+이 문서에서 코드를 추가하거나 예시 경로를 적을 때는 아래 규칙을 따른다.
+
+- Agent API와 실행 로직은 `apps/fastapi-api/app/routers`, `apps/fastapi-api/app/services`, `apps/fastapi-api/app/schemas`에 나눠 둔다.
+- React 에이전트 화면이 필요하면 `apps/web-react/src/features/agent`에 둔다.
+- React 공통 HTTP 요청 함수는 `apps/web-react/src/shared/api.ts`에 둔다.
+- React 화면, 컴포넌트, 스타일, 타입, 요청 코드는 기능 폴더 안에서 역할별로 나눈다.
+- DTO는 Nest 도메인 폴더 아래 `dto`, 타입/인터페이스는 해당 기능 폴더의 `types.ts` 또는 `interfaces`에 둔다.
+
 ## 목적
 
 이 문서는 [implementation_order.md](../implementation_order.md)의

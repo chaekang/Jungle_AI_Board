@@ -1,6 +1,6 @@
 import type { SubmitEvent } from "react"
-import "../../styles/components/auth/auth-panel.css"
-import "../../styles/components/auth/signup-panel.css"
+import "../styles/auth-panel.css"
+import "../styles/signup-panel.css"
 
 type SignupPanelProps = {
   email: string

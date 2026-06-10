@@ -1,5 +1,15 @@
 # 002_user_authentication
 
+## 현재 파일 경로 규칙
+
+이 문서에서 코드를 추가하거나 예시 경로를 적을 때는 아래 규칙을 따른다.
+
+- Nest 인증 코드는 `apps/nest-api/src/auth`, 사용자 조회는 `apps/nest-api/src/users`, 공통 사용자 타입은 `apps/nest-api/src/common`에 둔다.
+- React 인증 코드는 `apps/web-react/src/features/auth`에 둔다.
+- React 공통 HTTP 요청 함수는 `apps/web-react/src/shared/api.ts`에 둔다.
+- React 화면, 컴포넌트, 스타일, 타입, 요청 코드는 기능 폴더 안에서 역할별로 나눈다.
+- DTO는 Nest 도메인 폴더 아래 `dto`, 타입/인터페이스는 해당 기능 폴더의 `types.ts` 또는 `interfaces`에 둔다.
+
 ## 이 문서의 목표
 
 이 문서는 [implementation_order.md](../implementation_order.md)의 `3. 사용자 인증`을 실제로 구현하기 위한 아주 자세한 작업 가이드다.
@@ -18,7 +28,7 @@
 
 관련 개념 문서:
 
-- [docs/concept/002_user_authentication.md](../concept/002_user_authentication.md)
+- [docs/step 1/concept/002_user_authentication.md](./concept/002_user_authentication.md)
 
 ## 이 문서를 끝내면 되는 것
 
@@ -1554,306 +1564,298 @@ Guard는 "로그인한 사람인가?"만 본다.
 
 ## 15. React에서 최소한으로 붙여보기
 
-이제 React 초보자 기준으로, 복잡한 상태관리 라이브러리 없이 가장 단순한 방식으로 인증을 붙여 본다.
+이제 백엔드 인증 API를 React 화면에 연결한다.
 
 이번 단계 목표:
 
-- 회원가입 폼 하나
-- 로그인 폼 하나
-- `GET /auth/me` 버튼 하나
-- 로그아웃 버튼 하나
+- 로그인 화면과 회원가입 화면을 만든다
+- `POST /auth/register`, `POST /auth/login`, `GET /auth/me`, `GET /auth/check-email`을 연결한다
+- 로그인 후 access token을 `localStorage`에 저장한다
+- 새로고침 후에도 `GET /auth/me`로 로그인 상태를 복구한다
 
-라우터, Context, 전역 상태관리는 지금 하지 않아도 된다.
+이번 문서에서는 라우터, Context, 전역 상태관리 라이브러리는 사용하지 않는다.
+인증 상태는 `AuthPage` 한 곳에서 관리한다.
 
-### 15.1 먼저 알아둘 점
-
-현재 React 앱은 기본 Vite 시작 화면이다.  
-즉 인증 UI는 아직 하나도 없다.
-
-그래서 가장 쉬운 방법은 `App.tsx`를 임시로 인증 테스트 화면으로 바꾸는 것이다.
-
-### 15.2 토큰 저장 방식
+### 15.1 토큰 저장 방식
 
 이번 단계에서는 `localStorage`를 사용한다.
 
 이유:
 
-- 구현이 단순하다
-- 초보자가 동작 원리를 이해하기 쉽다
-
-다만 이건 "지금 단계에서 가장 쉬운 선택"이지 최종 정답은 아니다.
-
-- `localStorage`: 이번 단계에서 구현
-- `httpOnly cookie`: 이번 단계에서 구현하지 않음. 이유: `CORS credentials`, 쿠키 옵션, `CSRF` 대응까지 같이 설계가 바뀌기 때문
+- 구현이 가장 단순하다
+- 토큰 저장과 복구 흐름을 눈으로 확인하기 쉽다
 
 즉 이번 문서는 `localStorage` 기반 인증으로 고정해서 따라간다.
-쿠키 기반 인증은 이 문서 범위에 포함하지 않는다.
+`httpOnly cookie` 기반 인증은 이 문서 범위에 포함하지 않는다.
 
-### 15.3 `App.tsx` 전체 예시
+### 15.2 현재 프론트 구조
+
+현재 프론트는 기술별 폴더(`pages`, `components`, `types`, `styles`)로 흩어두기보다 기능별 폴더로 묶는다.
+
+인증 기능은 아래 위치에 모은다.
+
+- `apps/web-react/src/App.tsx`
+  - 현재 보여줄 화면을 선택하는 앱 진입점
+- `apps/web-react/src/shared/api.ts`
+  - React 앱 전체에서 공통으로 쓰는 `apiRequest()` 함수
+- `apps/web-react/src/features/auth/AuthPage.tsx`
+  - 인증 상태, 입력값, 화면 전환 흐름 담당
+- `apps/web-react/src/features/auth/api.ts`
+  - `register`, `login`, `getCurrentUser`, `checkEmail` API 함수
+- `apps/web-react/src/features/auth/types.ts`
+  - `PublicUser`, `LoginResponse`, `CheckEmailResponse` 타입 정의
+- `apps/web-react/src/features/auth/components/LoginPanel.tsx`
+  - 로그인 화면 조각
+- `apps/web-react/src/features/auth/components/SignupPanel.tsx`
+  - 회원가입 화면 조각
+- `apps/web-react/src/features/auth/styles/*`
+  - 인증 페이지와 인증 컴포넌트 스타일
+
+핵심 구조는 아래처럼 이해하면 된다.
+
+- 공통 HTTP 요청 처리는 `shared/api.ts`가 가진다.
+- 인증 API 경로와 요청 body 구성은 `features/auth/api.ts`가 가진다.
+- 인증 상태와 화면 전환은 `AuthPage`가 가진다.
+- 화면 조각은 `LoginPanel`, `SignupPanel`로 분리한다.
+
+`App.tsx`는 아래처럼 단순하다.
+
+```tsx
+import AuthPage from "./features/auth/AuthPage"
+
+export default function App() {
+  return <AuthPage />
+}
+```
+
+### 15.3 `AuthPage.tsx`가 관리하는 상태
+
+`AuthPage.tsx`에서는 아래 상태를 관리한다.
+
+- `mode`
+  - `"login"` 또는 `"signup"`
+- `registerName`
+- `registerEmail`
+- `registerPassword`
+- `registerPasswordConfirm`
+- `loginEmail`
+- `loginPassword`
+- `checkedEmail`
+  - 마지막으로 중복 확인한 이메일
+- `isEmailChecked`
+  - 중복 확인을 한 적이 있는지 여부
+- `isEmailAvailable`
+  - 중복 확인 결과 사용 가능한 이메일인지 여부
+- `token`
+  - `localStorage`에서 읽어 온 access token
+- `currentUser`
+  - 현재 로그인한 사용자 정보
+- `message`
+  - 성공 메시지
+- `error`
+  - 실패 메시지
+
+즉 로그인 입력값, 회원가입 입력값, 로그인 상태, 중복 확인 상태를 모두 부모인 `AuthPage`가 가지고 있다.
+자식 컴포넌트는 props를 받아서 화면만 렌더링한다.
+
+### 15.4 공통 API 호출 함수와 인증 API 함수
+
+프론트에서는 `shared/api.ts`의 `apiRequest()` 헬퍼로 HTTP 요청 공통 처리를 한다.
 
 파일:
 
-- `apps/web-react/src/App.tsx`
+- `apps/web-react/src/shared/api.ts`
 
-현재 내용을 잠시 치우고 아래처럼 바꿔도 된다.
+```ts
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000"
 
-```tsx
-import { FormEvent, useEffect, useState } from 'react'
-import './App.css'
-
-const API_BASE = 'http://localhost:3000'
-const TOKEN_KEY = 'agentic_board_access_token'
-
-type PublicUser = {
-  id: string
-  email: string
-  nickname: string
+type ApiErrorResponse = {
+  message?: string | string[]
 }
 
-type LoginResponse = {
-  accessToken: string
-  user: PublicUser
-}
-
-async function apiRequest<T>(
+export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
   token?: string,
 ): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers ?? {}),
     },
   })
 
-  const data = await response.json().catch(() => null)
+  const data = (await response.json().catch(() => null)) as ApiErrorResponse | T | null
 
   if (!response.ok) {
-    const message =
-      typeof data?.message === 'string'
-        ? data.message
-        : 'Request failed'
+    const errorMessage = (data as ApiErrorResponse | null)?.message
+    const message = Array.isArray(errorMessage) ? errorMessage.join(", ") : errorMessage
 
-    throw new Error(message)
+    throw new Error(message ?? "API request failed.")
   }
 
   return data as T
 }
-
-function App() {
-  const [registerEmail, setRegisterEmail] = useState('')
-  const [registerPassword, setRegisterPassword] = useState('')
-  const [registerNickname, setRegisterNickname] = useState('')
-
-  const [loginEmail, setLoginEmail] = useState('')
-  const [loginPassword, setLoginPassword] = useState('')
-
-  const [token, setToken] = useState<string | null>(
-    localStorage.getItem(TOKEN_KEY),
-  )
-  const [currentUser, setCurrentUser] = useState<PublicUser | null>(null)
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
-  const [loadingMe, setLoadingMe] = useState(false)
-
-  useEffect(() => {
-    if (!token) {
-      setCurrentUser(null)
-      return
-    }
-
-    void loadMe(token)
-  }, [token])
-
-  async function handleRegister(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setMessage('')
-    setError('')
-
-    try {
-      const user = await apiRequest<PublicUser>('/auth/register', {
-        method: 'POST',
-        body: JSON.stringify({
-          email: registerEmail,
-          password: registerPassword,
-          nickname: registerNickname,
-        }),
-      })
-
-      setMessage(`회원가입 성공: ${user.nickname}`)
-      setRegisterEmail('')
-      setRegisterPassword('')
-      setRegisterNickname('')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '회원가입 실패')
-    }
-  }
-
-  async function handleLogin(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setMessage('')
-    setError('')
-
-    try {
-      const result = await apiRequest<LoginResponse>('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({
-          email: loginEmail,
-          password: loginPassword,
-        }),
-      })
-
-      localStorage.setItem(TOKEN_KEY, result.accessToken)
-      setToken(result.accessToken)
-      setCurrentUser(result.user)
-      setMessage(`로그인 성공: ${result.user.nickname}`)
-      setLoginEmail('')
-      setLoginPassword('')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '로그인 실패')
-    }
-  }
-
-  async function loadMe(tokenValue: string) {
-    setLoadingMe(true)
-    setError('')
-
-    try {
-      const user = await apiRequest<PublicUser>(
-        '/auth/me',
-        { method: 'GET' },
-        tokenValue,
-      )
-
-      setCurrentUser(user)
-    } catch (err) {
-      localStorage.removeItem(TOKEN_KEY)
-      setToken(null)
-      setCurrentUser(null)
-      setError(err instanceof Error ? err.message : '사용자 조회 실패')
-    } finally {
-      setLoadingMe(false)
-    }
-  }
-
-  function handleLogout() {
-    localStorage.removeItem(TOKEN_KEY)
-    setToken(null)
-    setCurrentUser(null)
-    setMessage('로그아웃 완료')
-    setError('')
-  }
-
-  return (
-    <main style={{ maxWidth: 720, margin: '0 auto', padding: '40px 20px' }}>
-      <h1>Agentic Board Auth Test</h1>
-      <p>NestJS + React 인증 동작 확인용 임시 화면</p>
-
-      <section style={{ marginTop: 32 }}>
-        <h2>회원가입</h2>
-        <form onSubmit={handleRegister} style={{ display: 'grid', gap: 12 }}>
-          <input
-            type="email"
-            placeholder="email"
-            value={registerEmail}
-            onChange={(event) => setRegisterEmail(event.target.value)}
-          />
-          <input
-            type="password"
-            placeholder="password"
-            value={registerPassword}
-            onChange={(event) => setRegisterPassword(event.target.value)}
-          />
-          <input
-            type="text"
-            placeholder="nickname"
-            value={registerNickname}
-            onChange={(event) => setRegisterNickname(event.target.value)}
-          />
-          <button type="submit">회원가입</button>
-        </form>
-      </section>
-
-      <section style={{ marginTop: 32 }}>
-        <h2>로그인</h2>
-        <form onSubmit={handleLogin} style={{ display: 'grid', gap: 12 }}>
-          <input
-            type="email"
-            placeholder="email"
-            value={loginEmail}
-            onChange={(event) => setLoginEmail(event.target.value)}
-          />
-          <input
-            type="password"
-            placeholder="password"
-            value={loginPassword}
-            onChange={(event) => setLoginPassword(event.target.value)}
-          />
-          <button type="submit">로그인</button>
-        </form>
-      </section>
-
-      <section style={{ marginTop: 32 }}>
-        <h2>현재 사용자</h2>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          <button
-            type="button"
-            onClick={() => token && void loadMe(token)}
-            disabled={!token || loadingMe}
-          >
-            {loadingMe ? '불러오는 중...' : 'GET /auth/me'}
-          </button>
-          <button type="button" onClick={handleLogout}>
-            로그아웃
-          </button>
-        </div>
-
-        <pre style={{ background: '#f4f4f4', padding: 16 }}>
-          {JSON.stringify(
-            {
-              token,
-              currentUser,
-            },
-            null,
-            2,
-          )}
-        </pre>
-      </section>
-
-      {message ? <p style={{ color: 'green' }}>{message}</p> : null}
-      {error ? <p style={{ color: 'crimson' }}>{error}</p> : null}
-    </main>
-  )
-}
-
-export default App
 ```
 
-### 15.4 이 코드가 하는 일
+인증 화면에서는 이 공통 함수를 직접 계속 부르지 않고, `features/auth/api.ts`에서 인증 API 함수로 한 번 감싼다.
 
-회원가입 폼
+파일:
 
-- 이메일, 비밀번호, 닉네임을 입력받아 `/auth/register` 호출
+- `apps/web-react/src/features/auth/api.ts`
 
-로그인 폼
+```ts
+import { apiRequest } from "../../shared/api"
+import type { CheckEmailResponse, LoginResponse, PublicUser } from "./types"
 
-- 이메일, 비밀번호를 입력받아 `/auth/login` 호출
-- 성공하면 JWT를 `localStorage`에 저장
+export function register(input: { email: string; password: string; nickname: string }) {
+  return apiRequest<PublicUser>("/auth/register", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
 
-`useEffect`
+export function login(input: { email: string; password: string }) {
+  return apiRequest<LoginResponse>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
 
-- 앱이 새로 렌더링되었을 때 토큰이 있으면 `GET /auth/me` 호출
-- 새로고침해도 로그인 상태를 복원
+export function getCurrentUser(token: string) {
+  return apiRequest<PublicUser>("/auth/me", { method: "GET" }, token)
+}
 
-로그아웃
+export function checkEmail(email: string) {
+  return apiRequest<CheckEmailResponse>(
+    `/auth/check-email?email=${encodeURIComponent(email)}`,
+    { method: "GET" },
+  )
+}
+```
 
-- 저장된 토큰 제거
-- 사용자 상태 초기화
+이렇게 나누면 `AuthPage`는 URL 문자열을 직접 알 필요가 없다.
 
-### 15.5 왜 `id` 타입이 string인가
+```ts
+const result = await login({ email: loginEmail, password: loginPassword })
+```
+
+즉 `AuthPage`는 "로그인한다"는 흐름만 알고, `/auth/login`이라는 구체적인 경로는 `features/auth/api.ts`가 책임진다.
+### 15.5 화면 전환 방식
+
+현재 화면 전환은 `mode` 값으로 분기한다.
+
+```tsx
+{mode === "login" ? (
+  <LoginPanel
+    email={loginEmail}
+    onChangeEmail={setLoginEmail}
+    onChangePassword={setLoginPassword}
+    onShowSignup={() => {
+      setMessage("")
+      setError("")
+      setMode("signup")
+    }}
+    onSubmit={handleLogin}
+    password={loginPassword}
+  />
+) : (
+  <SignupPanel
+    email={registerEmail}
+    name={registerName}
+    onChangeEmail={handleRegisterEmailChange}
+    onChangeName={setRegisterName}
+    onChangePassword={setRegisterPassword}
+    onChangePasswordConfirm={setRegisterPasswordConfirm}
+    onCheckDuplicate={handleDuplicateCheck}
+    onShowLogin={() => {
+      setMessage("")
+      setError("")
+      setMode("login")
+    }}
+    onSubmit={handleRegister}
+    password={registerPassword}
+    passwordConfirm={registerPasswordConfirm}
+  />
+)}
+```
+
+동작은 아래와 같다.
+
+- `mode === "login"`이면 로그인 카드가 보인다
+- `mode === "signup"`이면 회원가입 카드가 보인다
+- 화면 전환 시 이전 성공 메시지와 에러 메시지는 함께 비운다
+
+### 15.6 회원가입 흐름
+
+회원가입 흐름은 아래 순서로 진행된다.
+
+1. `SignupPanel`에서 이름, 이메일, 비밀번호, 비밀번호 재확인을 입력한다.
+2. 이메일 입력이 바뀌면 `handleRegisterEmailChange()`가 실행된다.
+3. 이때 `checkedEmail`, `isEmailChecked`, `isEmailAvailable`을 초기화한다.
+4. 사용자가 중복 확인 버튼을 누르면 `handleDuplicateCheck()`가 실행된다.
+5. `GET /auth/check-email?email=...`을 호출해 이메일 사용 가능 여부를 확인한다.
+6. 사용 가능하면 `checkedEmail`과 `isEmailChecked`, `isEmailAvailable`을 갱신한다.
+7. 사용 중인 이메일이면 에러 메시지를 보여 준다.
+8. 사용자가 회원가입 submit을 누르면 `handleRegister()`가 실행된다.
+9. 먼저 비밀번호와 비밀번호 재확인 값이 같은지 검사한다.
+10. 그다음 현재 입력한 이메일이 방금 중복 확인한 이메일과 같은지 검사한다.
+11. 중복 확인을 통과했으면 `POST /auth/register`를 호출한다.
+12. 성공하면 성공 메시지를 보여 주고, 방금 가입한 이메일을 `loginEmail`에 넣어 둔다.
+13. 회원가입 관련 입력값과 중복 확인 상태를 초기화한다.
+14. `mode`를 `"login"`으로 바꿔 로그인 화면으로 돌려보낸다.
+
+즉 현재 회원가입은 "이메일 중복 확인 완료"를 먼저 거친 뒤에만 진행된다.
+
+### 15.7 로그인과 로그인 상태 복구 흐름
+
+로그인 흐름은 아래 순서로 진행된다.
+
+1. `LoginPanel`에서 이메일과 비밀번호를 입력한다.
+2. submit 시 `handleLogin()`이 실행된다.
+3. `POST /auth/login`을 호출한다.
+4. 성공하면 `accessToken`을 `localStorage`에 저장한다.
+5. `setToken(result.accessToken)`으로 React 상태도 갱신한다.
+6. `setCurrentUser(result.user)`로 현재 로그인 사용자 정보를 즉시 반영한다.
+7. 성공 메시지를 보여 주고 로그인 비밀번호 입력값은 비운다.
+
+로그인 상태 복구 흐름은 아래와 같다.
+
+1. `token` state의 초기값은 `localStorage.getItem(TOKEN_KEY)`다.
+2. 즉 새로고침 직후에도 저장된 토큰이 있으면 React가 그 값을 먼저 읽는다.
+3. `useEffect()`가 `token` 변경을 감지한다.
+4. `token`이 있으면 `loadMe(token)`을 호출한다.
+5. `loadMe()`는 `GET /auth/me`를 호출해 현재 사용자 정보를 다시 가져온다.
+6. 토큰이 유효하면 `currentUser`를 유지한다.
+7. 토큰이 만료되었거나 잘못되었으면 저장된 토큰을 삭제하고 로그아웃 상태로 정리한다.
+
+즉 현재 프론트 흐름은 아래 한 줄로 요약할 수 있다.
+
+`회원가입 -> 로그인 -> 토큰 저장 -> 새로고침 -> /auth/me로 로그인 상태 복구`
+
+### 15.8 로그아웃 흐름
+
+로그아웃은 `handleLogout()`에서 처리한다.
+
+- `localStorage`에서 토큰을 삭제한다
+- `token`을 `null`로 바꾼다
+- `currentUser`를 `null`로 바꾼다
+- 성공 메시지를 `"Signed out."`으로 바꾼다
+
+즉 프론트 기준 로그아웃은 "브라우저에 저장해 둔 인증 정보를 지우고, 화면 상태도 초기화하는 작업"이다.
+
+### 15.9 이 단계에서 기억할 포인트
+
+- 인증 상태는 `AuthPage` 한 곳에서 관리한다
+- access token은 `localStorage`에 저장한다
+- 로그인 후 `GET /auth/me`로 현재 사용자 정보를 복구한다
+- 회원가입 전에는 이메일 중복 확인을 먼저 통과해야 한다
+- 이메일 입력값이 바뀌면 이전 중복 확인 결과는 무효가 된다
+- 화면 조각은 `LoginPanel`, `SignupPanel`로 분리하고 실제 인증 로직은 부모가 가진다
+
+### 15.10 왜 `id` 타입이 string인가
 
 앞에서 설명한 `BigInt` 문제 때문이다.
 
@@ -2074,7 +2076,7 @@ npx prisma migrate dev
 7. `app.module.ts`에 `AuthModule` 등록
 8. `npm run start:dev`
 9. PowerShell로 회원가입, 로그인, `GET /auth/me` 테스트
-10. `apps/web-react/src/App.tsx`를 임시 인증 화면으로 바꿔서 프론트 연결 확인
+10. `apps/web-react/src/App.tsx`를 인증 시작 화면으로 바꿔서 프론트 연결 확인
 
 ---
 

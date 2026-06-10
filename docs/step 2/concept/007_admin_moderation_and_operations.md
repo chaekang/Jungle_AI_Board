@@ -1,5 +1,15 @@
 # 007_admin_moderation_and_operations_concepts
 
+## 현재 파일 경로 규칙
+
+이 문서에서 코드를 추가하거나 예시 경로를 적을 때는 아래 규칙을 따른다.
+
+- Nest 운영/관리 도메인 코드는 `apps/nest-api/src/admin` 또는 `apps/nest-api/src/moderation` 같은 도메인 폴더에 둔다.
+- React 관리자 화면은 `apps/web-react/src/features/admin`에 둔다.
+- React 공통 HTTP 요청 함수는 `apps/web-react/src/shared/api.ts`에 둔다.
+- React 화면, 컴포넌트, 스타일, 타입, 요청 코드는 기능 폴더 안에서 역할별로 나눈다.
+- DTO는 Nest 도메인 폴더 아래 `dto`, 타입/인터페이스는 해당 기능 폴더의 `types.ts` 또는 `interfaces`에 둔다.
+
 ## 이 문서의 역할
 
 이 문서는 `007_admin_moderation_and_operations` 단계에서 필요한

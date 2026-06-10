@@ -1,15 +1,14 @@
 import type { SubmitEvent } from "react"
-import "../../styles/components/auth/auth-panel.css"
-import "../../styles/components/auth/login-panel.css"
+import "../styles/auth-panel.css"
+import "../styles/login-panel.css"
 
-// 부모 컴포넌트로부터 어떤 값을 받아야 하는지 정해둔 타입
 type LoginPanelProps = {
-  email: string  // 이메일 입력값 문자열로 받음
-  onChangeEmail: (value: string) => void  // 이메일 입력값이 바뀌었을 때 실행할 함수
-  onChangePassword: (value: string) => void  // 비밀먼호 입력값이 바뀌었을 때 실행할 함수
-  onShowSignup: () => void  // 회원가입 화면으로 바꿀 때 실행할 함수, 인자를 받지 않고, 실행만 하는 함수
-  onSubmit: (event: SubmitEvent<HTMLFormElement>) => void | Promise<void>  // 로그인 form이 제출됐을 때 실행할 함수, 동기 함수일수도 비동기 함수일수도 있음
-  password: string  // 비밀번호 입력값 문자열로 받음
+  email: string
+  onChangeEmail: (value: string) => void
+  onChangePassword: (value: string) => void
+  onShowSignup: () => void
+  onSubmit: (event: SubmitEvent<HTMLFormElement>) => void | Promise<void>
+  password: string
 }
 
 export default function LoginPanel({
@@ -35,7 +34,6 @@ export default function LoginPanel({
             placeholder="email"
             autoComplete="email"
             value={email}
-            // event.target.value: 이벤트가 발생한 입력창의 현재 값
             onChange={(event) => onChangeEmail(event.target.value)}
           />
         </label>

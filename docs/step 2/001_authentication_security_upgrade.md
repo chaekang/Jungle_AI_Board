@@ -1,5 +1,15 @@
 # 001_authentication_security_upgrade
 
+## 현재 파일 경로 규칙
+
+이 문서에서 코드를 추가하거나 예시 경로를 적을 때는 아래 규칙을 따른다.
+
+- Nest 인증 코드는 `apps/nest-api/src/auth`, 사용자 조회는 `apps/nest-api/src/users`, 공통 사용자 타입은 `apps/nest-api/src/common`에 둔다.
+- React 인증 코드는 `apps/web-react/src/features/auth`에 둔다.
+- React 공통 HTTP 요청 함수는 `apps/web-react/src/shared/api.ts`에 둔다.
+- React 화면, 컴포넌트, 스타일, 타입, 요청 코드는 기능 폴더 안에서 역할별로 나눈다.
+- DTO는 Nest 도메인 폴더 아래 `dto`, 타입/인터페이스는 해당 기능 폴더의 `types.ts` 또는 `interfaces`에 둔다.
+
 ## 목적
 
 이 문서는 2차 구현에서 인증 구조를
@@ -37,7 +47,7 @@
 1. 토큰 저장 전략을 `cookie + refresh` 구조로 재설계
 2. Prisma에 세션 또는 리프레시 토큰 테이블 추가
 3. 로그인 / 재발급 / 로그아웃 API 분리
-4. 프론트 요청 유틸을 `credentials: 'include'` 기준으로 수정
+4. `apps/web-react/src/shared/api.ts`의 요청 옵션을 `credentials: 'include'` 기준으로 수정
 5. 이메일 인증 또는 비밀번호 재설정 플로우 추가
 6. 소셜 로그인 확장 포인트 설계
 

@@ -1,5 +1,15 @@
 # 003_review_media_and_quality_features
 
+## 현재 파일 경로 규칙
+
+이 문서에서 코드를 추가하거나 예시 경로를 적을 때는 아래 규칙을 따른다.
+
+- Nest 후기 도메인 코드는 `apps/nest-api/src/seat-reviews` 같은 도메인 폴더에 둔다.
+- React 후기 작성/조회 화면, 훅, 컴포넌트는 `apps/web-react/src/features/reviews`에 둔다.
+- React 공통 HTTP 요청 함수는 `apps/web-react/src/shared/api.ts`에 둔다.
+- React 화면, 컴포넌트, 스타일, 타입, 요청 코드는 기능 폴더 안에서 역할별로 나눈다.
+- DTO는 Nest 도메인 폴더 아래 `dto`, 타입/인터페이스는 해당 기능 폴더의 `types.ts` 또는 `interfaces`에 둔다.
+
 ## 목적
 
 이 문서는 2차 구현에서 후기 자체의 정보 밀도와 신뢰도를 높이기 위한
@@ -35,7 +45,7 @@
 2. Prisma 스키마와 응답 타입 확장
 3. 업로드 검증 규칙 추가
 4. 신고 / 검수 상태 필드 추가
-5. 프론트 후기 작성 UI 개선
+5. `apps/web-react/src/features/reviews`의 후기 작성 UI 개선
 
 ## 중요한 포인트
 
@@ -63,7 +73,7 @@
 - [ ] 후기 미디어 저장 방식 확정
 - [ ] 업로드 검증 규칙 구현
 - [ ] 품질 / 검수 상태 필드 추가
-- [ ] 후기 작성 UI 반영
+- [ ] `apps/web-react/src/features/reviews` 후기 작성 UI 반영
 - [ ] 이미지 포함 후기 응답 형식 확정
 
 ## 완료 기준
