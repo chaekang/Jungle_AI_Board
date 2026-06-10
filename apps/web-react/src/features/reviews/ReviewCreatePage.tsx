@@ -1,17 +1,22 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import type { FormEvent } from "react"
 import DraftPayloadPreview from "./components/DraftPayloadPreview"
 import MetadataSelects from "./components/MetadataSelects"
 import SeatLocationFields from "./components/SeatLocationFields"
 import { useReviewMetadata } from "./hooks/useReviewMetadata"
-import type { ReviewDraftPayload, SeatLocationDraft } from "./types"
+import { getTheaterSeatLayout } from "./theater-seat-layouts"
+import type { ReviewDraftPayload, SeatLocationDraft, TheaterSeatLayout } from "./types"
 
 function normalizeSeatText(value: string) {
   return value.trim()
 }
 
-function normalizeSeatToken(value: string) {
-  return value.trim().toUpperCase()
+function normalizeSeatRow(value: string) {
+  return normalizeSeatText(value).toUpperCase()
+}
+
+function hasOfficialSections(layout: TheaterSeatLayout) {
+  return Object.values(layout.sectionsByFloor).some((sections) => sections.length > 0)
 }
 
 const initialSeatLocation: SeatLocationDraft = {
@@ -23,37 +28,84 @@ const initialSeatLocation: SeatLocationDraft = {
 
 export default function ReviewCreatePage() {
   const [selectedTheaterId, setSelectedTheaterId] = useState("")
-  const [selectedMusicalId, setSelectedMusicalId] = useState("")
   const [selectedPerformanceId, setSelectedPerformanceId] = useState("")
+  const [workSearchText, setWorkSearchText] = useState("")
   const [seatLocation, setSeatLocation] = useState<SeatLocationDraft>(initialSeatLocation)
   const [previewPayload, setPreviewPayload] = useState<ReviewDraftPayload | null>(null)
+  const [formError, setFormError] = useState("")
 
-  const {
-    theaters,
-    musicals,
-    performances,
-    isLoadingMetadata,
-    isLoadingPerformances,
-    error,
-  } = useReviewMetadata(selectedTheaterId, selectedMusicalId)
+  const { theaters, workOptions, performances, isLoadingMetadata, isLoadingPerformances, error } =
+    useReviewMetadata(selectedTheaterId)
+
+  const selectedTheater = useMemo(
+    () => theaters.find((theater) => theater.id === selectedTheaterId) ?? null,
+    [theaters, selectedTheaterId],
+  )
+
+  const selectedPerformance = useMemo(
+    () => performances.find((performance) => performance.id === selectedPerformanceId) ?? null,
+    [performances, selectedPerformanceId],
+  )
+
+  const seatLayout = useMemo(() => getTheaterSeatLayout(selectedTheater), [selectedTheater])
+  const needsOfficialSection = hasOfficialSections(seatLayout)
 
   useEffect(() => {
     setSelectedPerformanceId("")
-  }, [selectedTheaterId, selectedMusicalId])
+    setWorkSearchText("")
+    setSeatLocation(initialSeatLocation)
+    setPreviewPayload(null)
+    setFormError("")
+  }, [selectedTheaterId])
+
+  useEffect(() => {
+    if (!selectedTheaterId) {
+      return
+    }
+
+    if (workOptions.length === 1) {
+      setSelectedPerformanceId(workOptions[0].performanceId)
+      return
+    }
+
+    if (
+      selectedPerformanceId &&
+      !workOptions.some((work) => work.performanceId === selectedPerformanceId)
+    ) {
+      setSelectedPerformanceId("")
+    }
+  }, [selectedPerformanceId, selectedTheaterId, workOptions])
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
-    const payload: ReviewDraftPayload = {
-      theaterId: selectedTheaterId,
-      musicalId: selectedMusicalId,
-      performanceId: selectedPerformanceId,
-      seatFloor: normalizeSeatToken(seatLocation.seatFloor),
-      seatSection: normalizeSeatToken(seatLocation.seatSection),
-      seatRow: normalizeSeatToken(seatLocation.seatRow),
-      seatNumber: normalizeSeatText(seatLocation.seatNumber),
+    if (
+      !selectedTheaterId ||
+      !selectedPerformanceId ||
+      !selectedPerformance ||
+      !seatLocation.seatFloor ||
+      (needsOfficialSection && !seatLocation.seatSection) ||
+      !seatLocation.seatRow.trim() ||
+      !seatLocation.seatNumber.trim()
+    ) {
+      setFormError("공연장, 작품, 좌석 위치를 모두 선택하거나 입력해주세요.")
+      setPreviewPayload(null)
+      return
     }
 
+    const payload: ReviewDraftPayload = {
+      theaterId: selectedTheaterId,
+      musicalId: selectedPerformance.musicalId,
+      performanceId: selectedPerformance.id,
+      seatFloor: normalizeSeatText(seatLocation.seatFloor),
+      seatRow: normalizeSeatRow(seatLocation.seatRow),
+      seatNumber: normalizeSeatText(seatLocation.seatNumber),
+      ...(needsOfficialSection
+        ? { seatSection: normalizeSeatText(seatLocation.seatSection) }
+        : {}),
+    }
+
+    setFormError("")
     setPreviewPayload(payload)
   }
 
@@ -62,23 +114,29 @@ export default function ReviewCreatePage() {
       <h1>좌석 리뷰 작성</h1>
 
       {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-      {isLoadingMetadata ? <p>공연장과 작품 목록을 불러오는 중입니다.</p> : null}
+      {formError ? <p style={{ color: "crimson" }}>{formError}</p> : null}
+      {isLoadingMetadata ? <p>공연장 목록을 불러오는 중입니다.</p> : null}
 
       <form onSubmit={handleSubmit}>
         <MetadataSelects
           theaters={theaters}
-          musicals={musicals}
-          performances={performances}
+          workOptions={workOptions}
           selectedTheaterId={selectedTheaterId}
-          selectedMusicalId={selectedMusicalId}
           selectedPerformanceId={selectedPerformanceId}
+          selectedPerformance={selectedPerformance}
+          workSearchText={workSearchText}
           isLoadingPerformances={isLoadingPerformances}
           onChangeTheaterId={setSelectedTheaterId}
-          onChangeMusicalId={setSelectedMusicalId}
           onChangePerformanceId={setSelectedPerformanceId}
+          onChangeWorkSearchText={setWorkSearchText}
         />
 
-        <SeatLocationFields value={seatLocation} onChange={setSeatLocation} />
+        <SeatLocationFields
+          value={seatLocation}
+          layout={seatLayout}
+          disabled={!selectedTheaterId}
+          onChange={setSeatLocation}
+        />
 
         <button type="submit">작성 값 확인</button>
       </form>

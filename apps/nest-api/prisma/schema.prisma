@@ -53,6 +53,7 @@ model Performance {
   id         BigInt      @id @default(autoincrement())
   musicalId  BigInt      @map("musical_id")
   theaterId  BigInt      @map("theater_id")
+  seasonLabel String?    @map("season_label")
   createdAt  DateTime    @default(now()) @map("created_at")
   updatedAt  DateTime    @updatedAt @map("updated_at")
 
@@ -60,7 +61,7 @@ model Performance {
   theater    Theater     @relation(fields: [theaterId], references: [id])
   seatReviews SeatReview[]
 
-  @@unique([musicalId, theaterId])
+  @@unique([musicalId, theaterId, seasonLabel])
   @@map("performances")
 }
 
@@ -71,7 +72,7 @@ model SeatReview {
   musicalId             BigInt      @map("musical_id")
   performanceId         BigInt?     @map("performance_id")
   seatFloor             String      @map("seat_floor")
-  seatSection           String      @map("seat_section")
+  seatSection           String?     @map("seat_section")
   seatRow               String      @map("seat_row")
   seatNumber            String      @map("seat_number")
   viewRating            Int         @map("view_rating")

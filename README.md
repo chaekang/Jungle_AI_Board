@@ -10,7 +10,7 @@ agentic-board/
     nest-api/
     fastapi-api/
     web-react/
-  infra/
+  docker-compose.yml
 ```
 
 ## Apps
@@ -18,7 +18,7 @@ agentic-board/
 - `apps/nest-api`: NestJS backend
 - `apps/fastapi-api`: FastAPI backend
 - `apps/web-react`: React frontend powered by Vite
-- `infra`: PostgreSQL and shared local infrastructure
+- `docker-compose.yml`: local PostgreSQL container
 
 ## Quick start
 

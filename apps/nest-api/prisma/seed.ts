@@ -66,12 +66,14 @@ async function main() {
       data: {
         musicalId: musicals.hadestown.id,
         theaterId: theaters.blueSquare.id,
+        seasonLabel: "25시즌",
       },
     }),
     moulinRougeCharlotte: await prisma.performance.create({
       data: {
         musicalId: musicals.moulinRouge.id,
         theaterId: theaters.charlotte.id,
+        seasonLabel: "25시즌",
       },
     }),
   };

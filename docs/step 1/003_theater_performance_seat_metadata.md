@@ -1,5 +1,193 @@
 # 003_theater_performance_seat_metadata
 
+## 현재 코드 기준 업데이트
+
+이 문서의 기준은 현재 코드에서 다음처럼 바뀌었다.
+
+### 1. 공연 조합은 시즌을 포함한다
+
+`Performance`는 이제 `작품 + 공연장`만 뜻하지 않는다. 같은 작품이 같은 공연장에서 여러 시즌으로 올라올 수 있으므로 `seasonLabel`을 함께 가진다.
+
+예를 들어 두산아트센터에서 `베어더뮤지컬`이 여러 시즌으로 올라오면 화면에는 아래처럼 나와야 한다.
+
+- `25시즌 베어더뮤지컬`
+- `23시즌 베어더뮤지컬`
+- `24-25시즌 베어더뮤지컬`
+
+그래서 `seasonLabel`은 `INT`가 아니라 `String?`이다.
+
+```prisma
+model Performance {
+  id          BigInt   @id @default(autoincrement())
+  musicalId   BigInt   @map("musical_id")
+  theaterId   BigInt   @map("theater_id")
+  seasonLabel String?  @map("season_label")
+
+  musical     Musical  @relation(fields: [musicalId], references: [id])
+  theater     Theater  @relation(fields: [theaterId], references: [id])
+
+  @@unique([musicalId, theaterId, seasonLabel])
+  @@map("performances")
+}
+```
+
+API 응답도 시즌 표시용 값을 내려준다.
+
+```ts
+{
+  id: "7",
+  theaterId: "3",
+  theaterName: "두산아트센터",
+  musicalId: "4",
+  musicalTitle: "베어더뮤지컬",
+  seasonLabel: "25시즌",
+  displayTitle: "25시즌 베어더뮤지컬"
+}
+```
+
+프론트에서는 작품 select의 실제 값으로 `musicalId`가 아니라 `performanceId`를 사용한다. 그래야 같은 `베어더뮤지컬`이라도 `23시즌`, `25시즌`을 서로 다른 선택지로 고를 수 있다. 저장 payload를 만들 때 `musicalId`는 선택된 `PerformanceOption`에서 자동으로 꺼낸다.
+
+### 2. 작품 검색은 작품명 기준으로 동작한다
+
+작품 선택지는 시즌까지 포함해서 보이지만, 검색은 작품명으로도 걸려야 한다.
+
+예를 들어 검색창에 `베어더뮤지컬`을 입력하면 아래 선택지가 같이 보여야 한다.
+
+- `25시즌 베어더뮤지컬`
+- `23시즌 베어더뮤지컬`
+
+이를 위해 프론트의 `ReviewWorkOption`은 `displayTitle`과 `searchText`를 분리한다.
+
+```ts
+export type ReviewWorkOption = {
+  performanceId: string
+  musicalId: string
+  musicalTitle: string
+  seasonLabel?: string | null
+  displayTitle: string
+  searchText: string
+}
+```
+
+### 3. 공연 조합 입력은 받지 않는다
+
+사용자가 별도로 공연 조합을 입력하거나 고르게 하지 않는다.
+
+현재 흐름은 아래와 같다.
+
+```text
+공연장 선택
+  -> 해당 공연장의 performance 목록 조회
+  -> 작품/시즌 선택지를 performanceId 기준으로 표시
+  -> 선택된 performance에서 musicalId, performanceId 자동 결정
+```
+
+즉 `ReviewCreatePage`는 제출 시 아래처럼 payload를 만든다.
+
+```ts
+const payload: ReviewDraftPayload = {
+  theaterId: selectedTheaterId,
+  musicalId: selectedPerformance.musicalId,
+  performanceId: selectedPerformance.id,
+  seatFloor,
+  seatRow,
+  seatNumber,
+  ...(needsOfficialSection ? { seatSection } : {}),
+}
+```
+
+### 4. 구역은 optional이다
+
+모든 공연장이 공식 구역을 제공하는 것은 아니다. 예스24스테이지처럼 공식적으로 `A/B/C` 구역 정보가 없는 공연장은 화면에서 구역 입력을 받지 않는다.
+
+그래서 DB와 프론트 타입 모두 `seatSection`은 optional이다.
+
+```prisma
+seatSection String? @map("seat_section")
+```
+
+```ts
+export type ReviewDraftPayload = {
+  theaterId: string
+  musicalId: string
+  performanceId: string
+  seatFloor: string
+  seatSection?: string
+  seatRow: string
+  seatNumber: string
+}
+```
+
+공식 구역이 있는 공연장만 구역 토글을 보여준다. 공식 구역이 없는 공연장은 `층 / 열 / 번호`만 입력한다.
+
+### 5. 공식 구역과 AI 설명용 블록은 다르다
+
+공식 구역이 없는 공연장도 실제 관람자들은 복도 기준으로 `왼쪽블록 / 중앙블록 / 오른쪽블록`처럼 말할 수 있다. 다만 이것은 공식 저장값인 `seatSection`이 아니다.
+
+프론트 좌석 layout에는 이를 위해 `aiBlocksByFloor`를 둘 수 있다.
+
+```ts
+export type TheaterSeatLayout = {
+  floors: SeatOption[]
+  sectionsByFloor: Record<string, SeatOption[]>
+  aiBlocksByFloor?: Record<string, SeatOption[]>
+}
+```
+
+예스24스테이지는 공식 구역 입력은 숨기고, AI 설명용으로만 아래 기준을 둔다.
+
+```ts
+const yes24StageLayout: TheaterSeatLayout = {
+  floors: [{ value: "1층", label: "1층" }],
+  sectionsByFloor: {},
+  aiBlocksByFloor: {
+    "1층": [
+      { value: "left", label: "왼쪽블록" },
+      { value: "center", label: "중앙블록" },
+      { value: "right", label: "오른쪽블록" },
+    ],
+  },
+}
+```
+
+### 6. 현재 공연장 좌석 구역 기준
+
+현재 프론트의 `apps/web-react/src/features/reviews/theater-seat-layouts.ts` 기준은 아래와 같다.
+
+| 공연장 | 공식 구역 입력 |
+| --- | --- |
+| 샤롯데씨어터 | 1층 A/B/C, 2층 A/B/C |
+| 두산아트센터 | 1층 A/B/C, 2층 D/E/F |
+| 홍익대 대학로 아트센터 | 1층 A/B/C, 2층 A/B/C |
+| 예스24스테이지 | 공식 구역 입력 없음, AI용 왼쪽블록/중앙블록/오른쪽블록만 보조 보관 |
+| 블루스퀘어 | 임시 기준 1층/2층/3층 A/B/C |
+
+### 7. 이 변경에 필요한 마이그레이션
+
+현재 코드 기준으로 아래 migration이 추가되어 있다.
+
+- `20260610082000_add_performance_season_label`
+- `20260610093000_make_seat_section_optional`
+
+로컬 DB에 반영할 때는 아래 명령을 사용한다.
+
+```powershell
+cd apps/nest-api
+npx prisma generate
+npx prisma migrate deploy
+```
+
+### 8. 아래 본문을 읽을 때 주의할 점
+
+아래 기존 본문에 `@@unique([musicalId, theaterId])`, 필수 `seatSection`, 별도 공연 조합 select처럼 적힌 예전 설명이 남아 있다면 위 기준이 최신이다. 실제 코드는 다음 파일들을 기준으로 확인한다.
+
+- `apps/nest-api/prisma/schema.prisma`
+- `apps/nest-api/src/metadata/metadata.service.ts`
+- `apps/web-react/src/features/reviews/ReviewCreatePage.tsx`
+- `apps/web-react/src/features/reviews/components/MetadataSelects.tsx`
+- `apps/web-react/src/features/reviews/components/SeatLocationFields.tsx`
+- `apps/web-react/src/features/reviews/theater-seat-layouts.ts`
+
 ## 현재 파일 경로 규칙
 
 이 문서에서 코드를 추가하거나 예시 경로를 적을 때는 아래 규칙을 따른다.
@@ -1473,6 +1661,46 @@ const payload: ReviewDraftPayload = {
 
 ### 10.9 `App.tsx`에 화면 연결하기
 
+여기까지 만들면 `ReviewCreatePage` 파일은 존재하지만, 아직 React 앱의 URL 흐름에는 연결되지 않았다.
+
+처음 확인만 할 때는 `App.tsx`에서 `AuthPage` 대신 `ReviewCreatePage`를 바로 렌더링해도 된다. 하지만 그 방식은 임시 확인용이다.
+
+정식으로 연결하려면 라우터를 둔다.
+
+이 단계에서는 아직 후기 CRUD를 만들지 않았다. 그래도 연결할 수 있다. 현재 `ReviewCreatePage`는 실제 후기를 저장하는 화면이라기보다, 후기 작성에 필요한 메타데이터를 고르고 다음 단계의 `POST /seat-reviews`가 받을 payload를 미리 만들어보는 화면이기 때문이다.
+
+즉 지금 가능한 범위는 아래와 같다.
+
+- `/theaters` 조회
+- `/musicals` 조회
+- `/performances` 조회
+- 극장, 작품, 공연 선택
+- 좌석 위치 입력
+- 제출 payload 미리보기
+
+아직 하지 않는 범위는 아래다.
+
+- `POST /seat-reviews`로 실제 후기 저장
+- `GET /seat-reviews`로 후기 목록 조회
+- `PATCH /seat-reviews/:id`로 후기 수정
+- `DELETE /seat-reviews/:id`로 후기 삭제
+
+그래서 이 단계의 URL은 `리뷰 저장 화면`이라기보다 `리뷰 작성 초안 화면`으로 이해하면 된다.
+
+권장 경로는 아래처럼 둔다.
+
+```text
+/              -> 로그인 / 회원가입 화면
+/reviews/new   -> 리뷰 작성 초안 화면
+```
+
+먼저 라우터 패키지를 설치한다.
+
+```powershell
+cd apps/web-react
+npm install react-router-dom
+```
+
 파일:
 
 - `apps/web-react/src/App.tsx`
@@ -1487,7 +1715,7 @@ export default function App() {
 }
 ```
 
-리뷰 작성 화면을 확인하려면 임시로 아래처럼 바꾼다.
+임시 확인용으로는 아래처럼 바꿀 수 있다.
 
 ```tsx
 import ReviewCreatePage from "./features/reviews/ReviewCreatePage";
@@ -1497,7 +1725,44 @@ export default function App() {
 }
 ```
 
-이걸 해야 브라우저에서 새로 만든 `ReviewCreatePage`가 실제로 보인다. 파일만 만들어두고 `App.tsx`에 연결하지 않으면 결과물이 나오지 않는다.
+하지만 정식 연결은 아래처럼 라우터로 처리한다.
+
+```tsx
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import AuthPage from "./features/auth/AuthPage";
+import ReviewCreatePage from "./features/reviews/ReviewCreatePage";
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<AuthPage />} />
+        <Route path="/reviews/new" element={<ReviewCreatePage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+```
+
+이렇게 하면 브라우저에서 아래 주소로 리뷰 작성 초안 화면을 열 수 있다.
+
+```text
+http://localhost:5173/reviews/new
+```
+
+파일만 만들어두고 `App.tsx`에 연결하지 않으면 브라우저에서는 결과물이 보이지 않는다.
+
+이 단계에서는 아직 로그인 여부에 따라 `/reviews/new` 접근을 막지 않는다. 보호 라우트는 후기 CRUD와 인증 상태 공유 구조를 붙일 때 추가한다.
+
+나중에는 흐름을 아래처럼 바꿀 수 있다.
+
+```text
+로그인 성공 -> /reviews/new 이동
+비로그인 상태에서 /reviews/new 접근 -> / 로 이동
+```
+
+하지만 지금은 메타데이터 API 연결 확인이 목적이므로, 먼저 `/reviews/new`가 열리고 select 목록이 채워지는지 확인한다.
 
 ### 10.10 화면에서 확인할 것
 
@@ -1511,6 +1776,12 @@ npm run web:dev
 
 ```text
 http://localhost:5173
+```
+
+정식 라우터 연결까지 했다면 리뷰 작성 초안 화면은 아래 주소로 연다.
+
+```text
+http://localhost:5173/reviews/new
 ```
 
 정상이라면 다음 흐름이 보여야 한다.

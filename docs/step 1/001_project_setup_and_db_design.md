@@ -1,5 +1,44 @@
 # 001_project_setup_and_db_design
 
+## 현재 코드 기준 업데이트
+
+좌석 리뷰의 메타데이터 구조는 현재 아래 기준을 따른다.
+
+- `performances`는 단순히 `musical_id + theater_id`만 저장하지 않는다.
+- 같은 작품이 같은 공연장에서 여러 시즌으로 올라올 수 있으므로 `season_label`을 문자열로 둔다.
+  - 예: `25시즌`, `24-25시즌`, `10주년`, `프리뷰`
+  - 숫자로만 표현할 수 없으므로 `INT`가 아니라 `String?`이다.
+- `performances`의 중복 기준은 `musical_id + theater_id + season_label`이다.
+- `seat_reviews.seat_section`은 nullable이다.
+  - 공식 좌석표에 `A/B/C` 같은 구역이 있는 공연장은 저장한다.
+  - 예스24스테이지처럼 공식 구역 정보가 없는 공연장은 저장하지 않는다.
+- 공식 구역이 없는 공연장도 나중에 AI가 설명할 때는 복도 기준으로 `왼쪽블록 / 중앙블록 / 오른쪽블록` 같은 비공식 블록을 사용할 수 있다.
+  - 이 값은 공식 구역 저장값이 아니라 AI 설명용 보조 메타데이터로 다룬다.
+
+현재 Prisma 기준 핵심 모양은 아래와 같다.
+
+```prisma
+model Performance {
+  id          BigInt   @id @default(autoincrement())
+  musicalId   BigInt   @map("musical_id")
+  theaterId   BigInt   @map("theater_id")
+  seasonLabel String?  @map("season_label")
+
+  musical     Musical  @relation(fields: [musicalId], references: [id])
+  theater     Theater  @relation(fields: [theaterId], references: [id])
+
+  @@unique([musicalId, theaterId, seasonLabel])
+  @@map("performances")
+}
+
+model SeatReview {
+  seatFloor   String  @map("seat_floor")
+  seatSection String? @map("seat_section")
+  seatRow     String  @map("seat_row")
+  seatNumber  String  @map("seat_number")
+}
+```
+
 ## 현재 파일 경로 규칙
 
 이 문서에서 코드를 추가하거나 예시 경로를 적을 때는 아래 규칙을 따른다.
@@ -73,7 +112,7 @@ apps/web-react/src
 확인 파일:
 
 - [package.json](/c:/Jungle/Jungle_AI_Board/package.json)
-- [infra/docker-compose.yml](/c:/Jungle/Jungle_AI_Board/infra/docker-compose.yml)
+- [docker-compose.yml](/c:/Jungle/Jungle_AI_Board/docker-compose.yml)
 
 현재 설정 기준 DB 정보:
 

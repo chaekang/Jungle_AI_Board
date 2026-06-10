@@ -1,5 +1,29 @@
 # 010_mcp_integration
 
+## 현재 코드 기준 업데이트
+
+MCP나 외부 좌석 메타데이터를 붙일 때는 공식 구역과 AI 설명용 블록을 분리한다.
+
+- 공식 구역
+  - 좌석표에 실제로 `A/B/C`, `D/E/F`처럼 표시된 값
+  - 리뷰 저장값 `seatSection`으로 들어갈 수 있음
+- AI 설명용 블록
+  - 공식 구역이 없지만 복도 기준으로 설명하기 위해 만든 보조 기준
+  - 예: `왼쪽블록`, `중앙블록`, `오른쪽블록`
+  - 공식 저장값으로 넣지 않고 `aiBlocksByFloor` 같은 메타데이터로 관리
+
+현재 프론트 layout 타입은 아래 기준이다.
+
+```ts
+export type TheaterSeatLayout = {
+  floors: SeatOption[]
+  sectionsByFloor: Record<string, SeatOption[]>
+  aiBlocksByFloor?: Record<string, SeatOption[]>
+}
+```
+
+MCP 연동 시 외부 데이터가 공식 구역인지, AI 설명용 보조 구역인지 먼저 판별해야 한다. 예스24스테이지처럼 공식 구역이 없는 공연장은 `seatSection`을 만들지 않고, AI 응답에서만 `왼쪽블록 / 중앙블록 / 오른쪽블록`을 사용할 수 있게 한다.
+
 ## 현재 파일 경로 규칙
 
 이 문서에서 코드를 추가하거나 예시 경로를 적을 때는 아래 규칙을 따른다.

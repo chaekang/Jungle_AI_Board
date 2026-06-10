@@ -1,10 +1,16 @@
-import { useEffect, useState } from "react"
-import { getMusicals, getPerformances, getTheaters } from "../api"
-import type { MusicalOption, PerformanceOption, TheaterOption } from "../types"
+import { useEffect, useMemo, useState } from "react"
+import { getPerformances, getTheaters } from "../api"
+import type { PerformanceOption, ReviewWorkOption, TheaterOption } from "../types"
 
-export function useReviewMetadata(selectedTheaterId: string, selectedMusicalId: string) {
+function getDisplayTitle(performance: PerformanceOption) {
+  return (
+    performance.displayTitle ??
+    [performance.seasonLabel, performance.musicalTitle].filter(Boolean).join(" ")
+  )
+}
+
+export function useReviewMetadata(selectedTheaterId: string) {
   const [theaters, setTheaters] = useState<TheaterOption[]>([])
-  const [musicals, setMusicals] = useState<MusicalOption[]>([])
   const [performances, setPerformances] = useState<PerformanceOption[]>([])
 
   const [isLoadingMetadata, setIsLoadingMetadata] = useState(true)
@@ -17,10 +23,9 @@ export function useReviewMetadata(selectedTheaterId: string, selectedMusicalId: 
         setError("")
         setIsLoadingMetadata(true)
 
-        const [theaterData, musicalData] = await Promise.all([getTheaters(), getMusicals()])
+        const theaterData = await getTheaters()
 
         setTheaters(theaterData)
-        setMusicals(musicalData)
       } catch (err) {
         setError(err instanceof Error ? err.message : "메타데이터를 불러오지 못했습니다.")
       } finally {
@@ -32,6 +37,12 @@ export function useReviewMetadata(selectedTheaterId: string, selectedMusicalId: 
   }, [])
 
   useEffect(() => {
+    if (!selectedTheaterId) {
+      setPerformances([])
+      setIsLoadingPerformances(false)
+      return
+    }
+
     async function loadPerformances() {
       try {
         setError("")
@@ -39,7 +50,6 @@ export function useReviewMetadata(selectedTheaterId: string, selectedMusicalId: 
 
         const performanceData = await getPerformances({
           theaterId: selectedTheaterId,
-          musicalId: selectedMusicalId,
         })
 
         setPerformances(performanceData)
@@ -52,11 +62,26 @@ export function useReviewMetadata(selectedTheaterId: string, selectedMusicalId: 
     }
 
     void loadPerformances()
-  }, [selectedTheaterId, selectedMusicalId])
+  }, [selectedTheaterId])
+
+  const workOptions = useMemo<ReviewWorkOption[]>(() => {
+    return performances.map((performance) => {
+      const displayTitle = getDisplayTitle(performance)
+
+      return {
+        performanceId: performance.id,
+        musicalId: performance.musicalId,
+        musicalTitle: performance.musicalTitle,
+        seasonLabel: performance.seasonLabel,
+        displayTitle,
+        searchText: `${performance.musicalTitle} ${displayTitle}`.toLowerCase(),
+      }
+    })
+  }, [performances])
 
   return {
     theaters,
-    musicals,
+    workOptions,
     performances,
     isLoadingMetadata,
     isLoadingPerformances,

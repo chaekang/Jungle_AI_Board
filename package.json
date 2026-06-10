@@ -11,8 +11,8 @@
     "web:dev": "npm --prefix apps/web-react run dev",
     "web:build": "npm --prefix apps/web-react run build",
     "web:lint": "npm --prefix apps/web-react run lint",
-    "db:up": "docker compose -f infra/docker-compose.yml up -d",
-    "db:down": "docker compose -f infra/docker-compose.yml down",
-    "db:logs": "docker compose -f infra/docker-compose.yml logs -f postgres"
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f postgres"
   }
 }
