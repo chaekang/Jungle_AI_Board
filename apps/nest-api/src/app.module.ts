@@ -4,6 +4,7 @@ import { AuthModule } from "./auth/auth.module";
 import { DatabaseModule } from "./database/database.module";
 import { HealthModule } from "./health/health.module";
 import { MetadataModule } from "./metadata/metadata.module";
+import { SeatReviewsModule } from "./seat-reviews/seat-reviews.module";
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { MetadataModule } from "./metadata/metadata.module";
     HealthModule,
     AuthModule,
     MetadataModule,
+    SeatReviewsModule
   ],
 })
 export class AppModule {}
