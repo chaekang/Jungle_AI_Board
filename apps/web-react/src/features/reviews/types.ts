@@ -64,3 +64,63 @@ export type ReviewDraftPayload = {
   seatRow: string
   seatNumber: string
 }
+
+// 리뷰 평점 정보
+export type ReviewRatingDraft = {
+  viewRating: number;
+  soundRating: number;
+  comfortRating: number;
+  expressionRating: number;
+  stageVisibilityRating: number;
+}
+
+// 평점과 본문을 더한 최종 POST body
+export type CreateSeatReviewPayload = ReviewDraftPayload & 
+  ReviewRatingDraft & {
+    content: string;
+  }
+
+// 서버 응답 타입
+export type PublicSeatReview = {
+  id: string;
+  author: {
+    id: string;
+    nickname: string;
+  }
+  theater: {
+    id: string;
+    name: string;
+  }
+  musical: {
+    id: string;
+    title: string;
+  }
+  performance: {
+    id: string;
+    seasonLabel?: string | null;
+  } | null
+  seat: {
+    floor: string;
+    section?: string | null;
+    row: string;
+    number: string;
+  }
+  ratings: {
+    view: number;
+    sound: number;
+    comfort: number;
+    expression: number;
+    stageVisibility: number;
+  }
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 리뷰 목록 API 응답 타입
+export type SeatReviewListResponse = {
+  items: PublicSeatReview[];
+  total: number;
+  page: number;
+  limit: number;
+}

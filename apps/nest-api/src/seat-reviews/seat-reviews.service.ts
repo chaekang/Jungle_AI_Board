@@ -236,7 +236,7 @@ export class SeatReviewsService {
                 row: review.seatRow,
                 number: review.seatNumber
             },
-            rating: {
+            ratings: {
                 view: review.viewRating,
                 sound: review.soundRating,
                 comfort: review.comfortRating,

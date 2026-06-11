@@ -5,8 +5,7 @@ import LoginPanel from "./components/LoginPanel"
 import SignupPanel from "./components/SignupPanel"
 import "./styles/auth-page.css"
 import type { PublicUser } from "./types"
-
-const TOKEN_KEY = "jungle_ai_board_access_token" // 브라우저 localStorage에 토큰 저장할 때 쓰는 이름
+import { TOKEN_KEY } from "./constants"
 
 export default function AuthPage() {
   const [mode, setMode] = useState<"login" | "signup">("login")

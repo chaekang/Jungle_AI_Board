@@ -1,0 +1,1 @@
+export const TOKEN_KEY = "jungle_ai_board_access_token"
