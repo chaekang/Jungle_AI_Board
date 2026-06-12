@@ -17,6 +17,11 @@ const seatReviewInclude = {
   theater: true,
   musical: true,
   performance: true,
+  seatReviewTags: {
+    include: {
+      tag: true,
+    },
+  },
 } satisfies Prisma.SeatReviewInclude;
 
 type SeatReviewWithRelations = Prisma.SeatReviewGetPayload<{
@@ -33,12 +38,14 @@ export class SeatReviewsService {
     const theaterId = this.parseId(dto.theaterId, 'theaterId');
     const musicalId = this.parseId(dto.musicalId, 'musicalId');
     const performanceId = this.parseId(dto.performanceId, 'performanceId');
+    const tagIds = this.parseUniqueIds(dto.tagIds ?? [], 'tagIds');
 
     await this.assertPerformanceMatches({
       performanceId,
       theaterId,
       musicalId,
     });
+    await this.assertTagsExist(tagIds);
 
     const review = await this.prisma.seatReview.create({
       data: {
@@ -56,6 +63,16 @@ export class SeatReviewsService {
         expressionRating: dto.expressionRating,
         stageVisibilityRating: dto.stageVisibilityRating,
         content: dto.content.trim(),
+        ...(tagIds.length > 0
+          ? {
+              seatReviewTags: {
+                createMany: {
+                  data: tagIds.map((tagId) => ({ tagId })),
+                  skipDuplicates: true,
+                },
+              },
+            }
+          : {}),
       },
       include: seatReviewInclude,
     });
@@ -127,6 +144,15 @@ export class SeatReviewsService {
 
     this.assertAuthor(existingReview.authorId, user.id);
 
+    const tagIds =
+      dto.tagIds !== undefined
+        ? this.parseUniqueIds(dto.tagIds, 'tagIds')
+        : undefined;
+
+    if (tagIds !== undefined) {
+      await this.assertTagsExist(tagIds);
+    }
+
     const updateReview = await this.prisma.seatReview.update({
       where: { id: reviewId },
       data: {
@@ -156,6 +182,21 @@ export class SeatReviewsService {
           ? { stageVisibilityRating: dto.stageVisibilityRating }
           : {}),
         ...(dto.content !== undefined ? { content: dto.content.trim() } : {}),
+        ...(tagIds !== undefined
+          ? {
+              seatReviewTags: {
+                deleteMany: {},
+                ...(tagIds.length > 0
+                  ? {
+                      createMany: {
+                        data: tagIds.map((tagId) => ({ tagId })),
+                        skipDuplicates: true,
+                      },
+                    }
+                  : {}),
+              },
+            }
+          : {}),
       },
       include: seatReviewInclude,
     });
@@ -201,6 +242,28 @@ export class SeatReviewsService {
       throw new BadRequestException(
         `${fieldName} must be a positive integer string`,
       );
+    }
+  }
+
+  private parseUniqueIds(values: string[], fieldName: string) {
+    return [...new Set(values.map((value) => this.parseId(value, fieldName)))];
+  }
+
+  private async assertTagsExist(tagIds: bigint[]) {
+    if (tagIds.length === 0) {
+      return;
+    }
+
+    const tagCount = await this.prisma.tag.count({
+      where: {
+        id: {
+          in: tagIds,
+        },
+      },
+    });
+
+    if (tagCount !== tagIds.length) {
+      throw new BadRequestException('One or more tags were not found');
     }
   }
 
@@ -277,6 +340,11 @@ export class SeatReviewsService {
         stageVisibility: review.stageVisibilityRating,
       },
       content: review.content,
+      tags: review.seatReviewTags.map(({ tag }) => ({
+        id: tag.id.toString(),
+        name: tag.name,
+        type: tag.type,
+      })),
       createdAt: review.createdAt.toISOString(),
       updatedAt: review.updatedAt.toISOString(),
     };

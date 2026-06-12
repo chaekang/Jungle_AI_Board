@@ -1,5 +1,7 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayUnique,
+  IsArray,
   IsInt,
   IsOptional,
   IsString,
@@ -65,4 +67,10 @@ export class UpdateSeatReviewDto {
   @IsString()
   @MinLength(10)
   content?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  tagIds?: string[];
 }

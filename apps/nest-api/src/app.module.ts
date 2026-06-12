@@ -6,6 +6,7 @@ import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { MetadataModule } from './metadata/metadata.module';
 import { SeatReviewsModule } from './seat-reviews/seat-reviews.module';
+import { TagsModule } from './tags/tags.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { SeatReviewsModule } from './seat-reviews/seat-reviews.module';
     MetadataModule,
     SeatReviewsModule,
     CommentsModule,
+    TagsModule,
   ],
 })
 export class AppModule {}
