@@ -16,12 +16,19 @@ describe('HealthController (e2e)', () => {
   });
 
   it('/health (GET)', () => {
-    return request(app.getHttpServer())
+    const server = app.getHttpServer() as Parameters<typeof request>[0];
+
+    return request(server)
       .get('/health')
       .expect(200)
       .expect((response) => {
-        expect(response.body.status).toBe('ok');
-        expect(response.body.database).toBe('connected');
+        const body = response.body as {
+          status?: unknown;
+          database?: unknown;
+        };
+
+        expect(body.status).toBe('ok');
+        expect(body.database).toBe('connected');
       });
   });
 
