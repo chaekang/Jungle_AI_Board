@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { getCurrentUser } from "../auth/api"
 import { TOKEN_KEY } from "../auth/constants"
+import ReviewComments from "../comments/components/ReviewComments"
 import SeatReviewCard from "./components/SeatReviewCard"
 import { deleteSeatReview } from "./api"
 import { useSeatReviews } from "./hooks/useSeatReviews"
@@ -714,6 +715,11 @@ export default function ReviewBoardPage() {
               onEdit={handleEditReview}
               review={selectedReview}
               variant="detail"
+            />
+            <ReviewComments
+              authToken={authToken}
+              currentUserId={currentUser?.id}
+              reviewId={selectedReview.id}
             />
           </section>
         </div>
