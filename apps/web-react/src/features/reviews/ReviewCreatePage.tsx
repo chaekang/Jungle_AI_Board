@@ -1,15 +1,22 @@
-import { useEffect, useMemo, useState } from "react"
-import type { SubmitEvent } from "react"
-import { useNavigate } from "react-router-dom"
+import { useEffect, useMemo, useRef, useState } from "react"
+import type { FocusEvent, SubmitEvent } from "react"
+import { useNavigate, useParams } from "react-router-dom"
 import { useReviewMetadata } from "./hooks/useReviewMetadata"
-import { getTheaterSeatLayout } from "./theater-seat-layouts"
+import {
+  getTheaterSeatLayout,
+  makeFloorSectionKey,
+  makeSeatLineKey,
+} from "./theater-seat-layouts"
 import type {
   CreateSeatReviewPayload,
+  PublicSeatReview,
   SeatLocationDraft,
   TheaterSeatLayout,
+  UpdateSeatReviewPayload,
 } from "./types"
 import { TOKEN_KEY } from "../auth/constants"
-import { createSeatReview } from "./api"
+import { createSeatReview, getSeatReview, updateSeatReview } from "./api"
+import { getSelectedTheaterForSeatLayout } from "./review-create-seat-layout"
 import "./styles/review-create-page.css"
 
 function normalizeSeatText(value: string) {
@@ -17,11 +24,15 @@ function normalizeSeatText(value: string) {
 }
 
 function normalizeSeatRow(value: string) {
-  return normalizeSeatText(value).toUpperCase()
+  return normalizeSeatText(value)
 }
 
 function hasOfficialSections(layout: TheaterSeatLayout) {
   return Object.values(layout.sectionsByFloor).some((sections) => sections.length > 0)
+}
+
+function getReviewWorkTitle(review: PublicSeatReview) {
+  return [review.performance?.seasonLabel, review.musical.title].filter(Boolean).join(" ")
 }
 
 const initialSeatLocation: SeatLocationDraft = {
@@ -30,6 +41,8 @@ const initialSeatLocation: SeatLocationDraft = {
   seatRow: "",
   seatNumber: "",
 }
+
+type SeatDropdownKey = "row" | "number"
 
 const ratingOptions = [
   { value: 1, label: "최악" },
@@ -49,11 +62,14 @@ const ratingFields = [
 
 export default function ReviewCreatePage() {
   const navigate = useNavigate()
+  const { reviewId } = useParams()
+  const isEditMode = Boolean(reviewId)
   const [selectedTheaterId, setSelectedTheaterId] = useState("")
-  const [isTheaterListOpen, setIsTheaterListOpen] = useState(false)
+  const [theaterSearchText, setTheaterSearchText] = useState("")
   const [selectedPerformanceId, setSelectedPerformanceId] = useState("")
   const [workSearchText, setWorkSearchText] = useState("")
   const [seatLocation, setSeatLocation] = useState<SeatLocationDraft>(initialSeatLocation)
+  const [openSeatDropdown, setOpenSeatDropdown] = useState<SeatDropdownKey | null>(null)
   const [formError, setFormError] = useState("")
 
   const [content, setContent] = useState("")
@@ -66,15 +82,23 @@ export default function ReviewCreatePage() {
   })
   const [submitMessage, setSubmitMessage] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [editingReview, setEditingReview] = useState<PublicSeatReview | null>(null)
+  const isSubmittingRef = useRef(false)
+  const skipNextTheaterResetRef = useRef(false)
+  const hasAppliedEditPerformanceRef = useRef(false)
 
   const { theaters, workOptions, performances, isLoadingMetadata, isLoadingPerformances, error } =
     useReviewMetadata(selectedTheaterId)
 
   const selectedTheater = useMemo(
-    () => theaters.find((theater) => theater.id === selectedTheaterId) ?? null,
-    [theaters, selectedTheaterId],
+    () =>
+      getSelectedTheaterForSeatLayout({
+        theaters,
+        selectedTheaterId,
+        editingReview,
+      }),
+    [editingReview, theaters, selectedTheaterId],
   )
-  const selectedTheaterName = selectedTheater?.name ?? "공연장 선택"
 
   const selectedPerformance = useMemo(
     () => performances.find((performance) => performance.id === selectedPerformanceId) ?? null,
@@ -86,6 +110,42 @@ export default function ReviewCreatePage() {
   const sections = seatLocation.seatFloor
     ? seatLayout.sectionsByFloor[seatLocation.seatFloor] ?? []
     : []
+  const rowOptions =
+    seatLocation.seatFloor && seatLocation.seatSection
+      ? seatLayout.rowsByFloorAndSection?.[
+          makeFloorSectionKey(seatLocation.seatFloor, seatLocation.seatSection)
+        ] ?? []
+      : []
+  const numberOptions =
+    seatLocation.seatFloor && seatLocation.seatSection && seatLocation.seatRow
+      ? seatLayout.numbersBySeatLine?.[
+          makeSeatLineKey(
+            seatLocation.seatFloor,
+            seatLocation.seatSection,
+            seatLocation.seatRow,
+          )
+        ] ?? []
+      : []
+  const selectedRowLabel =
+    rowOptions.find((row) => row.value === seatLocation.seatRow)?.label ??
+    (seatLocation.seatRow ? `${seatLocation.seatRow}열` : "열 선택")
+  const selectedNumberLabel =
+    numberOptions.find((number) => number.value === seatLocation.seatNumber)?.label ??
+    (seatLocation.seatNumber ? `${seatLocation.seatNumber}번` : "번호 선택")
+  const isRowDropdownDisabled =
+    !selectedTheaterId || !seatLocation.seatSection || rowOptions.length === 0
+  const isNumberDropdownDisabled =
+    !selectedTheaterId || !seatLocation.seatRow || numberOptions.length === 0
+  const normalizedTheaterSearchText = theaterSearchText.trim().toLowerCase()
+  const filteredTheaterOptions = useMemo(
+    () =>
+      normalizedTheaterSearchText
+        ? theaters.filter((theater) =>
+            theater.name.toLowerCase().includes(normalizedTheaterSearchText),
+          )
+        : theaters,
+    [normalizedTheaterSearchText, theaters],
+  )
   const normalizedSearchText = workSearchText.trim().toLowerCase()
   const filteredWorkOptions = useMemo(
     () =>
@@ -96,6 +156,61 @@ export default function ReviewCreatePage() {
   )
 
   useEffect(() => {
+    if (!reviewId) {
+      return
+    }
+
+    let isMounted = true
+    const editingReviewId = reviewId
+
+    async function loadEditingReview() {
+      try {
+        setFormError("")
+
+        const review = await getSeatReview(editingReviewId)
+
+        if (!isMounted) {
+          return
+        }
+
+        skipNextTheaterResetRef.current = true
+        hasAppliedEditPerformanceRef.current = false
+        setEditingReview(review)
+        setSelectedTheaterId(review.theater.id)
+        setTheaterSearchText(review.theater.name)
+        setWorkSearchText(getReviewWorkTitle(review))
+        setSeatLocation({
+          seatFloor: review.seat.floor,
+          seatSection: review.seat.section ?? "",
+          seatRow: review.seat.row,
+          seatNumber: review.seat.number,
+        })
+        setRatings({
+          viewRating: review.ratings.view,
+          soundRating: review.ratings.sound,
+          comfortRating: review.ratings.comfort,
+          expressionRating: review.ratings.expression,
+          stageVisibilityRating: review.ratings.stageVisibility,
+        })
+        setContent(review.content)
+      } catch (err) {
+        setFormError(err instanceof Error ? err.message : "후기를 불러오지 못했습니다.")
+      }
+    }
+
+    void loadEditingReview()
+
+    return () => {
+      isMounted = false
+    }
+  }, [reviewId])
+
+  useEffect(() => {
+    if (skipNextTheaterResetRef.current) {
+      skipNextTheaterResetRef.current = false
+      return
+    }
+
     setSelectedPerformanceId("")
     setWorkSearchText("")
     setSeatLocation(initialSeatLocation)
@@ -103,7 +218,28 @@ export default function ReviewCreatePage() {
   }, [selectedTheaterId])
 
   useEffect(() => {
+    if (
+      !editingReview ||
+      hasAppliedEditPerformanceRef.current ||
+      isLoadingPerformances ||
+      !editingReview.performance
+    ) {
+      return
+    }
+
+    if (workOptions.some((work) => work.performanceId === editingReview.performance?.id)) {
+      setSelectedPerformanceId(editingReview.performance.id)
+      setWorkSearchText(getReviewWorkTitle(editingReview))
+      hasAppliedEditPerformanceRef.current = true
+    }
+  }, [editingReview, isLoadingPerformances, workOptions])
+
+  useEffect(() => {
     if (!selectedTheaterId) {
+      return
+    }
+
+    if (isEditMode && editingReview && !hasAppliedEditPerformanceRef.current) {
       return
     }
 
@@ -116,6 +252,10 @@ export default function ReviewCreatePage() {
   }, [selectedPerformanceId, selectedTheaterId, workOptions])
 
   useEffect(() => {
+    if (isEditMode && editingReview && !hasAppliedEditPerformanceRef.current) {
+      return
+    }
+
     if (
       selectedPerformanceId &&
       !filteredWorkOptions.some((work) => work.performanceId === selectedPerformanceId)
@@ -124,13 +264,24 @@ export default function ReviewCreatePage() {
     }
   }, [filteredWorkOptions, selectedPerformanceId])
 
+  function handleSeatDropdownBlur(event: FocusEvent<HTMLDivElement>) {
+    const nextFocusedElement = event.relatedTarget as Node | null
+
+    if (!event.currentTarget.contains(nextFocusedElement)) {
+      setOpenSeatDropdown(null)
+    }
+  }
+
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
 
+    if (isSubmittingRef.current) {
+      return
+    }
+
     if (
       !selectedTheaterId ||
-      !selectedPerformanceId ||
-      !selectedPerformance ||
+      (!isEditMode && (!selectedPerformanceId || !selectedPerformance)) ||
       !seatLocation.seatFloor ||
       (needsOfficialSection && !seatLocation.seatSection) ||
       !seatLocation.seatRow.trim() ||
@@ -141,10 +292,7 @@ export default function ReviewCreatePage() {
       return
     }
 
-    const payload: CreateSeatReviewPayload = {
-      theaterId: selectedTheaterId,
-      musicalId: selectedPerformance.musicalId,
-      performanceId: selectedPerformance.id,
+    const reviewFields = {
       seatFloor: normalizeSeatText(seatLocation.seatFloor),
       seatRow: normalizeSeatRow(seatLocation.seatRow),
       seatNumber: normalizeSeatText(seatLocation.seatNumber),
@@ -157,6 +305,7 @@ export default function ReviewCreatePage() {
 
     setFormError("")
     setSubmitMessage("")
+    isSubmittingRef.current = true
     setIsSubmitting(true)
 
     try {
@@ -166,6 +315,25 @@ export default function ReviewCreatePage() {
         throw new Error("로그인 후 후기를 작성할 수 있습니다.")
       }
 
+      if (isEditMode && reviewId) {
+        const payload: UpdateSeatReviewPayload = reviewFields
+        await updateSeatReview(reviewId, payload, token)
+        setSubmitMessage("후기가 수정되었습니다.")
+        navigate("/")
+        return
+      }
+
+      if (!selectedPerformance) {
+        throw new Error("공연 정보를 찾을 수 없습니다.")
+      }
+
+      const payload: CreateSeatReviewPayload = {
+        theaterId: selectedTheaterId,
+        musicalId: selectedPerformance.musicalId,
+        performanceId: selectedPerformance.id,
+        ...reviewFields,
+      }
+
       await createSeatReview(payload, token)
       setSubmitMessage("후기가 저장되었습니다.")
     }
@@ -173,13 +341,14 @@ export default function ReviewCreatePage() {
       setFormError(err instanceof Error ? err.message : "후기 저장에 실패했습니다.")
     }
     finally {
+      isSubmittingRef.current = false
       setIsSubmitting(false)
     }
   }
 
   return (
     <main className="review-create-page">
-      <h1 className="review-create-title">리뷰 작성</h1>
+      <h1 className="review-create-title">{isEditMode ? "리뷰 수정" : "리뷰 작성"}</h1>
 
       {error ? <p className="review-create-message review-create-message--error">{error}</p> : null}
       {formError ? (
@@ -193,36 +362,37 @@ export default function ReviewCreatePage() {
         <section className="review-create-panel review-create-panel--primary">
           <div className="review-create-row">
             <span className="review-create-label">공연장</span>
-            <div className="review-create-dropdown">
-              <button
-                className="review-create-dropdown-trigger"
-                type="button"
-                aria-expanded={isTheaterListOpen}
-                onClick={() => setIsTheaterListOpen((isOpen) => !isOpen)}
-              >
-                <span>{selectedTheaterName}</span>
-                <span aria-hidden="true">⌄</span>
-              </button>
+            <div className="review-create-work-control">
+              <input
+                className="review-create-input review-create-input--work"
+                value={theaterSearchText}
+                disabled={isEditMode || isLoadingMetadata}
+                onChange={(event) => {
+                  setTheaterSearchText(event.target.value)
+                  setSelectedTheaterId("")
+                }}
+                placeholder="공연장을 검색하세요"
+              />
 
-              {isTheaterListOpen ? (
-                <div className="review-create-dropdown-menu" role="listbox" aria-label="공연장 목록">
-                  {theaters.length > 0 ? (
-                    theaters.map((theater) => (
+              {normalizedTheaterSearchText && !selectedTheaterId ? (
+                <div className="review-create-work-results" role="listbox" aria-label="공연장 검색 결과">
+                  {filteredTheaterOptions.length > 0 ? (
+                    filteredTheaterOptions.map((theater) => (
                       <button
                         key={theater.id}
-                        className="review-create-dropdown-option"
+                        className="review-create-work-result"
                         type="button"
-                        aria-selected={selectedTheaterId === theater.id}
+                        aria-pressed={selectedTheaterId === theater.id}
                         onClick={() => {
                           setSelectedTheaterId(theater.id)
-                          setIsTheaterListOpen(false)
+                          setTheaterSearchText(theater.name)
                         }}
                       >
                         {theater.name}
                       </button>
                     ))
                   ) : (
-                    <p className="review-create-dropdown-empty">공연장 목록이 없습니다.</p>
+                    <p className="review-create-work-empty">검색 결과가 없습니다.</p>
                   )}
                 </div>
               ) : null}
@@ -235,7 +405,7 @@ export default function ReviewCreatePage() {
               <input
                 className="review-create-input review-create-input--work"
                 value={workSearchText}
-                disabled={!selectedTheaterId || isLoadingPerformances}
+                disabled={isEditMode || !selectedTheaterId || isLoadingPerformances}
                 onChange={(event) => {
                   setWorkSearchText(event.target.value)
                   setSelectedPerformanceId("")
@@ -282,9 +452,16 @@ export default function ReviewCreatePage() {
                   type="button"
                   aria-pressed={seatLocation.seatFloor === floor.value}
                   disabled={!selectedTheaterId}
-                  onClick={() =>
-                    setSeatLocation({ ...seatLocation, seatFloor: floor.value, seatSection: "" })
-                  }
+                  onClick={() => {
+                    setSeatLocation({
+                      ...seatLocation,
+                      seatFloor: floor.value,
+                      seatSection: "",
+                      seatRow: "",
+                      seatNumber: "",
+                    })
+                    setOpenSeatDropdown(null)
+                  }}
                 >
                   {floor.label}
                 </button>
@@ -303,9 +480,15 @@ export default function ReviewCreatePage() {
                     type="button"
                     aria-pressed={seatLocation.seatSection === section.value}
                     disabled={!selectedTheaterId || !seatLocation.seatFloor}
-                    onClick={() =>
-                      setSeatLocation({ ...seatLocation, seatSection: section.value })
-                    }
+                    onClick={() => {
+                      setSeatLocation({
+                        ...seatLocation,
+                        seatSection: section.value,
+                        seatRow: "",
+                        seatNumber: "",
+                      })
+                      setOpenSeatDropdown(null)
+                    }}
                   >
                     {section.label}
                   </button>
@@ -316,23 +499,75 @@ export default function ReviewCreatePage() {
 
           <div className="review-create-row review-create-row--seat">
             <span className="review-create-label">열</span>
-            <input
-              className="review-create-input review-create-input--seat"
-              value={seatLocation.seatRow}
-              disabled={!selectedTheaterId}
-              onChange={(event) =>
-                setSeatLocation({ ...seatLocation, seatRow: event.target.value })
-              }
-            />
+            <div className="review-create-dropdown review-create-dropdown--seat" onBlur={handleSeatDropdownBlur}>
+              <button
+                className="review-create-dropdown-trigger review-create-dropdown-trigger--seat"
+                type="button"
+                aria-expanded={openSeatDropdown === "row"}
+                disabled={isRowDropdownDisabled}
+                onClick={() =>
+                  setOpenSeatDropdown(openSeatDropdown === "row" ? null : "row")
+                }
+              >
+                <span>{selectedRowLabel}</span>
+                <span aria-hidden="true" />
+              </button>
+              {openSeatDropdown === "row" ? (
+                <div className="review-create-dropdown-menu review-create-dropdown-menu--seat" role="listbox">
+                  {rowOptions.map((row) => (
+                    <button
+                      key={row.value}
+                      className="review-create-dropdown-option"
+                      type="button"
+                      aria-selected={seatLocation.seatRow === row.value}
+                      onClick={() => {
+                        setSeatLocation({
+                          ...seatLocation,
+                          seatRow: row.value,
+                          seatNumber: "",
+                        })
+                        setOpenSeatDropdown(null)
+                      }}
+                    >
+                      {row.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <span className="review-create-label review-create-label--number">번호</span>
-            <input
-              className="review-create-input review-create-input--seat"
-              value={seatLocation.seatNumber}
-              disabled={!selectedTheaterId}
-              onChange={(event) =>
-                setSeatLocation({ ...seatLocation, seatNumber: event.target.value })
-              }
-            />
+            <div className="review-create-dropdown review-create-dropdown--seat" onBlur={handleSeatDropdownBlur}>
+              <button
+                className="review-create-dropdown-trigger review-create-dropdown-trigger--seat"
+                type="button"
+                aria-expanded={openSeatDropdown === "number"}
+                disabled={isNumberDropdownDisabled}
+                onClick={() =>
+                  setOpenSeatDropdown(openSeatDropdown === "number" ? null : "number")
+                }
+              >
+                <span>{selectedNumberLabel}</span>
+                <span aria-hidden="true" />
+              </button>
+              {openSeatDropdown === "number" ? (
+                <div className="review-create-dropdown-menu review-create-dropdown-menu--seat" role="listbox">
+                  {numberOptions.map((number) => (
+                    <button
+                      key={number.value}
+                      className="review-create-dropdown-option"
+                      type="button"
+                      aria-selected={seatLocation.seatNumber === number.value}
+                      onClick={() => {
+                        setSeatLocation({ ...seatLocation, seatNumber: number.value })
+                        setOpenSeatDropdown(null)
+                      }}
+                    >
+                      {number.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </div>
         </section>
 
@@ -376,7 +611,7 @@ export default function ReviewCreatePage() {
             나가기
           </button>
           <button className="review-create-action" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "저장 중..." : "저장하기"}
+            {isSubmitting ? "저장 중..." : isEditMode ? "수정하기" : "저장하기"}
           </button>
         </div>
       </form>

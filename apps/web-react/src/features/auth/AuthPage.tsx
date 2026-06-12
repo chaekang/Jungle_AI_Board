@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import type { SubmitEvent } from "react"
+import { useLocation, useNavigate } from "react-router-dom"
 import { checkEmail, getCurrentUser, login, register } from "./api"
 import LoginPanel from "./components/LoginPanel"
 import SignupPanel from "./components/SignupPanel"
@@ -7,7 +8,22 @@ import "./styles/auth-page.css"
 import type { PublicUser } from "./types"
 import { TOKEN_KEY } from "./constants"
 
+type AuthLocationState = {
+  redirectTo?: string
+}
+
+function getSafeRedirectPath(redirectTo?: string) {
+  if (!redirectTo || !redirectTo.startsWith("/") || redirectTo.startsWith("//")) {
+    return "/"
+  }
+
+  return redirectTo
+}
+
 export default function AuthPage() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const redirectPath = getSafeRedirectPath((location.state as AuthLocationState | null)?.redirectTo)
   const [mode, setMode] = useState<"login" | "signup">("login")
 
   // 회원가입 상태(회원가입 입력칸 저장)
@@ -111,6 +127,7 @@ export default function AuthPage() {
       setCurrentUser(result.user) // 현재 로그인한 유저 저장
       setMessage(`Signed in as ${result.user.nickname}.`) // 메시지 저장
       setLoginPassword("") // 비밀번호 비우기
+      navigate(redirectPath, { replace: true })
     } catch (err) {
       // error에 메시지 저장
       setError(err instanceof Error ? err.message : "Login failed.")
@@ -191,6 +208,9 @@ export default function AuthPage() {
           <p className="brand-kicker">MUSICAL SEAT ARCHIVE</p>
           <h1>Agentic Board</h1>
           <p className="brand-copy">A simple sign-in flow for reviews, seat notes, and saved activity.</p>
+          <button type="button" className="auth-home-button" onClick={() => navigate("/")}>
+            홈으로
+          </button>
 
           {currentUser ? (
             <div className="auth-current-user">

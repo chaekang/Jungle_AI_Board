@@ -39,11 +39,16 @@ export type SeatOption = {
   label: string
 }
 
+export type SeatHorizontalPosition = "left" | "center" | "right"
+
 // 공연장별 좌석 층/구역 선택지
 export type TheaterSeatLayout = {
   floors: SeatOption[]
   sectionsByFloor: Record<string, SeatOption[]>
+  rowsByFloorAndSection?: Record<string, SeatOption[]>
+  numbersBySeatLine?: Record<string, SeatOption[]>
   aiBlocksByFloor?: Record<string, SeatOption[]>
+  positionBySeat?: Record<string, SeatHorizontalPosition>
 }
 
 // 사용자가 입력 중인 좌석 위치 정보
@@ -78,6 +83,11 @@ export type ReviewRatingDraft = {
 export type CreateSeatReviewPayload = ReviewDraftPayload & 
   ReviewRatingDraft & {
     content: string;
+  }
+
+export type UpdateSeatReviewPayload = Partial<SeatLocationDraft> &
+  Partial<ReviewRatingDraft> & {
+    content?: string;
   }
 
 // 서버 응답 타입

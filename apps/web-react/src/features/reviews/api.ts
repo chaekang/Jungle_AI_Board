@@ -1,5 +1,5 @@
 import { apiRequest } from "../../shared/api"
-import type { PublicSeatReview, SeatReviewListResponse, CreateSeatReviewPayload, MusicalOption, PerformanceOption, TheaterOption } from "./types"
+import type { PublicSeatReview, SeatReviewListResponse, CreateSeatReviewPayload, UpdateSeatReviewPayload, MusicalOption, PerformanceOption, TheaterOption } from "./types"
 
 // 극장 목록 가져오기
 export function getTheaters() {
@@ -47,12 +47,36 @@ export function createSeatReview(input: CreateSeatReviewPayload, token: string) 
   )
 }
 
+type GetSeatReviewsParams = {
+  theaterId?: string
+  musicalId?: string
+  performanceId?: string
+  page?: number
+  limit?: number
+}
+
 // 좌석 리뷰 목록 가져오기
-export function getSeatReviews(params: {performanceId?: string} = {}) {
+export function getSeatReviews(params: GetSeatReviewsParams = {}) {
   const searchParams = new URLSearchParams()
+
+  if (params.theaterId) {
+    searchParams.set("theaterId", params.theaterId)
+  }
+
+  if (params.musicalId) {
+    searchParams.set("musicalId", params.musicalId)
+  }
 
   if (params.performanceId) {
     searchParams.set("performanceId", params.performanceId)
+  }
+
+  if (params.page) {
+    searchParams.set("page", String(params.page))
+  }
+
+  if (params.limit) {
+    searchParams.set("limit", String(params.limit))
   }
 
   const queryString = searchParams.toString()
@@ -64,4 +88,25 @@ export function getSeatReviews(params: {performanceId?: string} = {}) {
 // 리뷰 하나의 상세 정보 가져오기
 export function getSeatReview(id: string) {
   return apiRequest<PublicSeatReview>(`/seat-reviews/${id}`)
+}
+
+export function updateSeatReview(id: string, input: UpdateSeatReviewPayload, token: string) {
+  return apiRequest<PublicSeatReview>(
+    `/seat-reviews/${id}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    },
+    token,
+  )
+}
+
+export function deleteSeatReview(id: string, token: string) {
+  return apiRequest<{ delete: boolean }>(
+    `/seat-reviews/${id}`,
+    {
+      method: "DELETE",
+    },
+    token,
+  )
 }

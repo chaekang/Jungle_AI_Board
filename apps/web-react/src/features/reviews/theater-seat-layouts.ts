@@ -1,90 +1,87 @@
-import type { TheaterOption, TheaterSeatLayout } from "./types"
+import {
+  getTheaterSeatMapConfig,
+  type TheaterSeatMapConfig,
+} from "./theater-seat-map-configs"
+import { buildSeatPositionMap } from "./seat-map-position"
+import { makeSeatOption, mergeSeatOptions } from "./seat-layout-options"
+import type { SeatOption, TheaterOption, TheaterSeatLayout } from "./types"
 
-const abcSections = [
-  { value: "A", label: "A구역" },
-  { value: "B", label: "B구역" },
-  { value: "C", label: "C구역" },
-]
+function makeOption(value: string, suffix = ""): SeatOption {
+  return makeSeatOption(value, suffix)
+}
 
-const defSections = [
-  { value: "D", label: "D구역" },
-  { value: "E", label: "E구역" },
-  { value: "F", label: "F구역" },
-]
+export function makeFloorSectionKey(floor: string, section: string) {
+  return `${floor}::${section}`
+}
 
-const aisleBasedAiBlocks = [
-  { value: "left", label: "왼쪽블록" },
-  { value: "center", label: "중앙블록" },
-  { value: "right", label: "오른쪽블록" },
-]
+export function makeSeatLineKey(floor: string, section: string, row: string) {
+  return `${floor}::${section}::${row}`
+}
 
-const twoFloorAbcLayout: TheaterSeatLayout = {
-  floors: [
-    { value: "1층", label: "1층" },
-    { value: "2층", label: "2층" },
-  ],
+function uniqueOptions(values: string[], suffix = "") {
+  return Array.from(new Set(values)).map((value) => makeOption(value, suffix))
+}
+
+function isCopyrightSeatNumber(value: string) {
+  return value.toLowerCase().includes("copyright")
+}
+
+function buildLayoutFromSeatMap(config: TheaterSeatMapConfig): TheaterSeatLayout {
+  const sectionsByFloor: TheaterSeatLayout["sectionsByFloor"] = {}
+  const rowsByFloorAndSection: NonNullable<TheaterSeatLayout["rowsByFloorAndSection"]> = {}
+  const numbersBySeatLine: NonNullable<TheaterSeatLayout["numbersBySeatLine"]> = {}
+
+  config.floors.forEach((floor) => {
+    sectionsByFloor[floor.floor] = uniqueOptions(
+      floor.blocks.map((block) => block.section),
+      "구역",
+    )
+
+    floor.blocks.forEach((block) => {
+      const floorSectionKey = makeFloorSectionKey(floor.floor, block.section)
+      rowsByFloorAndSection[floorSectionKey] = mergeSeatOptions(
+        rowsByFloorAndSection[floorSectionKey],
+        block.rows.map((row) => row.row),
+        "열",
+      )
+
+      block.rows.forEach((row) => {
+        const seatLineKey = makeSeatLineKey(floor.floor, block.section, row.row)
+        numbersBySeatLine[seatLineKey] = mergeSeatOptions(
+          numbersBySeatLine[seatLineKey],
+          row.cells
+            .filter((cell) => cell.type === "seat")
+            .filter((cell) => !isCopyrightSeatNumber(cell.number))
+            .map((cell) => cell.number),
+          "번",
+        )
+      })
+    })
+  })
+
+  return {
+    floors: config.floors.map((floor) => makeOption(floor.floor)),
+    sectionsByFloor,
+    rowsByFloorAndSection,
+    numbersBySeatLine,
+    positionBySeat: buildSeatPositionMap(config),
+  }
+}
+
+const fallbackLayout: TheaterSeatLayout = {
+  floors: [makeOption("1층"), makeOption("2층")],
   sectionsByFloor: {
-    "1층": abcSections,
-    "2층": abcSections,
+    "1층": [makeOption("A", "구역"), makeOption("B", "구역"), makeOption("C", "구역")],
+    "2층": [makeOption("A", "구역"), makeOption("B", "구역"), makeOption("C", "구역")],
   },
-}
-
-const doosanArtCenterLayout: TheaterSeatLayout = {
-  floors: [
-    { value: "1층", label: "1층" },
-    { value: "2층", label: "2층" },
-  ],
-  sectionsByFloor: {
-    "1층": abcSections,
-    "2층": defSections,
-  },
-}
-
-const twoFloorNoOfficialSectionsLayout: TheaterSeatLayout = {
-  floors: [
-    { value: "1층", label: "1층" },
-    { value: "2층", label: "2층" },
-  ],
-  sectionsByFloor: {},
-  aiBlocksByFloor: {
-    "1층": aisleBasedAiBlocks,
-    "2층": aisleBasedAiBlocks,
-  },
-}
-
-const blueSquareLayout: TheaterSeatLayout = {
-  floors: [
-    { value: "1층", label: "1층" },
-    { value: "2층", label: "2층" },
-    { value: "3층", label: "3층" },
-  ],
-  sectionsByFloor: {
-    "1층": abcSections,
-    "2층": abcSections,
-    "3층": abcSections,
-  },
-}
-
-const theaterLayoutsByName: Record<string, TheaterSeatLayout> = {
-  샤롯데씨어터: twoFloorAbcLayout,
-  "Charlotte Theater": twoFloorAbcLayout,
-  두산아트센터: doosanArtCenterLayout,
-  "홍익대 대학로 아트센터": twoFloorAbcLayout,
-  "광림아트센터 BBCH홀": twoFloorNoOfficialSectionsLayout,
-  "YES24 Stage": twoFloorNoOfficialSectionsLayout,
-  YES24스테이지: twoFloorNoOfficialSectionsLayout,
-  예스24스테이지: twoFloorNoOfficialSectionsLayout,
-  "예스24스테이지 1관": twoFloorNoOfficialSectionsLayout,
-  "예스24스테이지 2관": twoFloorNoOfficialSectionsLayout,
-  "예스24스테이지 3관": twoFloorNoOfficialSectionsLayout,
-  "Blue Square": blueSquareLayout,
-  블루스퀘어: blueSquareLayout,
 }
 
 export function getTheaterSeatLayout(theater: TheaterOption | null): TheaterSeatLayout {
   if (!theater) {
-    return twoFloorAbcLayout
+    return fallbackLayout
   }
 
-  return theaterLayoutsByName[theater.name] ?? twoFloorAbcLayout
+  const config = getTheaterSeatMapConfig(theater.name)
+
+  return config ? buildLayoutFromSeatMap(config) : fallbackLayout
 }
