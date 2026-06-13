@@ -3,7 +3,7 @@ import {
   type TheaterSeatMapConfig,
 } from "./theater-seat-map-configs"
 import { buildSeatPositionMap } from "./seat-map-position"
-import { makeSeatOption, mergeSeatOptions } from "./seat-layout-options"
+import { makeSeatOption, mergeSeatOptions, sortSectionOptions } from "./seat-layout-options"
 import type { SeatOption, TheaterOption, TheaterSeatLayout } from "./types"
 
 function makeOption(value: string, suffix = ""): SeatOption {
@@ -19,7 +19,7 @@ export function makeSeatLineKey(floor: string, section: string, row: string) {
 }
 
 function uniqueOptions(values: string[], suffix = "") {
-  return Array.from(new Set(values)).map((value) => makeOption(value, suffix))
+  return sortSectionOptions(Array.from(new Set(values)).map((value) => makeOption(value, suffix)))
 }
 
 function isCopyrightSeatNumber(value: string) {
