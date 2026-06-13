@@ -14,7 +14,9 @@ describe('SeatReviewsService tags', () => {
     },
     seatReview: {
       create: jest.fn(),
+      findMany: jest.fn(),
       findUnique: jest.fn(),
+      count: jest.fn(),
       update: jest.fn(),
     },
     seatReviewTag: {
@@ -151,6 +153,153 @@ describe('SeatReviewsService tags', () => {
         },
       },
     });
+  });
+
+  it('builds search filters, sorting, pagination, and hasNext metadata', async () => {
+    const prisma = makePrisma();
+    prisma.seatReview.findMany.mockResolvedValue([reviewWithRelations]);
+    prisma.seatReview.count.mockResolvedValue(11);
+    prisma.$transaction.mockImplementation((queries: unknown[]) =>
+      Promise.all(queries),
+    );
+
+    const service = new SeatReviewsService(prisma as never);
+
+    await expect(
+      service.findAll({
+        q: 'phantom',
+        theater: 'Dream',
+        musical: 'Great',
+        seasonLabel: '2026',
+        seatFloor: '1F',
+        seatSection: 'A',
+        seatRow: 'A',
+        seatNumber: '12',
+        tag: 'view',
+        hasObstruction: false,
+        minViewRating: 4,
+        minSoundRating: 3,
+        sort: 'rating',
+        page: 2,
+        limit: 10,
+      }),
+    ).resolves.toMatchObject({
+      items: [{ id: '11' }],
+      total: 11,
+      page: 2,
+      limit: 10,
+      hasNext: false,
+    });
+
+    expect(prisma.seatReview.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          theater: {
+            name: {
+              contains: 'Dream',
+              mode: 'insensitive',
+            },
+          },
+          musical: {
+            title: {
+              contains: 'Great',
+              mode: 'insensitive',
+            },
+          },
+          performance: {
+            seasonLabel: {
+              contains: '2026',
+              mode: 'insensitive',
+            },
+          },
+          seatFloor: { equals: '1F', mode: 'insensitive' },
+          seatSection: { equals: 'A', mode: 'insensitive' },
+          seatRow: { equals: 'A', mode: 'insensitive' },
+          seatNumber: { equals: '12', mode: 'insensitive' },
+          viewRating: { gte: 4 },
+          soundRating: { gte: 3 },
+          AND: [
+            {
+              OR: [
+                {
+                  content: {
+                    contains: 'phantom',
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  theater: {
+                    name: {
+                      contains: 'phantom',
+                      mode: 'insensitive',
+                    },
+                  },
+                },
+                {
+                  musical: {
+                    title: {
+                      contains: 'phantom',
+                      mode: 'insensitive',
+                    },
+                  },
+                },
+                {
+                  performance: {
+                    seasonLabel: {
+                      contains: 'phantom',
+                      mode: 'insensitive',
+                    },
+                  },
+                },
+                {
+                  seatReviewTags: {
+                    some: {
+                      tag: {
+                        name: {
+                          contains: 'phantom',
+                          mode: 'insensitive',
+                        },
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+            {
+              seatReviewTags: {
+                some: {
+                  tag: {
+                    name: {
+                      contains: 'view',
+                      mode: 'insensitive',
+                    },
+                  },
+                },
+              },
+            },
+            {
+              seatReviewTags: {
+                none: {
+                  tag: {
+                    name: '시야방해',
+                  },
+                },
+              },
+            },
+          ],
+        },
+        orderBy: [
+          { viewRating: 'desc' },
+          { soundRating: 'desc' },
+          { comfortRating: 'desc' },
+          { expressionRating: 'desc' },
+          { stageVisibilityRating: 'desc' },
+          { createdAt: 'desc' },
+        ],
+        skip: 10,
+        take: 10,
+      }),
+    );
   });
 
   it('replaces review tags when updating with tag ids', async () => {

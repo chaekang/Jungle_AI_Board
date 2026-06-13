@@ -35,6 +35,11 @@ export class SeatReviewsController {
     return this.seatReviewsService.findAll(query);
   }
 
+  @Get('search')
+  search(@Query() query: SeatReviewQueryDto) {
+    return this.seatReviewsService.findAll(query);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.seatReviewsService.findOne(id);

@@ -92,6 +92,12 @@ model SeatReview {
   comments              Comment[]
   seatReviewTags        SeatReviewTag[]
 
+  @@index([theaterId])
+  @@index([musicalId])
+  @@index([performanceId])
+  @@index([seatFloor])
+  @@index([seatSection])
+  @@index([createdAt])
   @@map("seat_reviews")
 }
 
@@ -131,5 +137,6 @@ model SeatReviewTag {
   tag          Tag        @relation(fields: [tagId], references: [id])
 
   @@unique([seatReviewId, tagId])
+  @@index([tagId])
   @@map("seat_review_tags")
 }

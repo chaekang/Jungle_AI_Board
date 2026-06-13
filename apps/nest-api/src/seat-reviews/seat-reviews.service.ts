@@ -24,6 +24,9 @@ const seatReviewInclude = {
   },
 } satisfies Prisma.SeatReviewInclude;
 
+const insensitive = 'insensitive' as const;
+const obstructionTagName = '시야방해';
+
 type SeatReviewWithRelations = Prisma.SeatReviewGetPayload<{
   include: typeof seatReviewInclude;
 }>;
@@ -85,24 +88,13 @@ export class SeatReviewsService {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
-
-    const where: Prisma.SeatReviewWhereInput = {
-      ...(query.theaterId
-        ? { theaterId: this.parseId(query.theaterId, 'theaterId') }
-        : {}),
-      ...(query.musicalId
-        ? { musicalId: this.parseId(query.musicalId, 'musicalId') }
-        : {}),
-      ...(query.performanceId
-        ? { performanceId: this.parseId(query.performanceId, 'performanceId') }
-        : {}),
-    };
+    const where = this.buildFindAllWhere(query);
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.seatReview.findMany({
         where,
         include: seatReviewInclude,
-        orderBy: { createdAt: 'desc' },
+        orderBy: this.buildFindAllOrderBy(query.sort),
         skip,
         take: limit,
       }),
@@ -114,6 +106,7 @@ export class SeatReviewsService {
       total,
       page,
       limit,
+      hasNext: page * limit < total,
     };
   }
 
@@ -268,6 +261,254 @@ export class SeatReviewsService {
   }
 
   // 사용자가 보낸 `performanceId`, `theaterId`, `musicalId`가 맞는 조합인지 확인
+  private buildFindAllWhere(query: SeatReviewQueryDto) {
+    const and: Prisma.SeatReviewWhereInput[] = [];
+
+    if (query.q) {
+      and.push({
+        OR: [
+          {
+            content: {
+              contains: query.q,
+              mode: insensitive,
+            },
+          },
+          {
+            theater: {
+              name: {
+                contains: query.q,
+                mode: insensitive,
+              },
+            },
+          },
+          {
+            musical: {
+              title: {
+                contains: query.q,
+                mode: insensitive,
+              },
+            },
+          },
+          {
+            performance: {
+              seasonLabel: {
+                contains: query.q,
+                mode: insensitive,
+              },
+            },
+          },
+          {
+            seatReviewTags: {
+              some: {
+                tag: {
+                  name: {
+                    contains: query.q,
+                    mode: insensitive,
+                  },
+                },
+              },
+            },
+          },
+        ],
+      });
+    }
+
+    if (query.tag) {
+      and.push({
+        seatReviewTags: {
+          some: {
+            tag: {
+              name: {
+                contains: query.tag,
+                mode: insensitive,
+              },
+            },
+          },
+        },
+      });
+    }
+
+    if (query.hasObstruction !== undefined) {
+      and.push({
+        seatReviewTags: query.hasObstruction
+          ? {
+              some: {
+                tag: {
+                  name: obstructionTagName,
+                },
+              },
+            }
+          : {
+              none: {
+                tag: {
+                  name: obstructionTagName,
+                },
+              },
+            },
+      });
+    }
+
+    const where: Prisma.SeatReviewWhereInput = {
+      ...(query.theaterId
+        ? { theaterId: this.parseId(query.theaterId, 'theaterId') }
+        : {}),
+      ...(query.theater
+        ? {
+            theater: {
+              name: {
+                contains: query.theater,
+                mode: insensitive,
+              },
+            },
+          }
+        : {}),
+      ...(query.musicalId
+        ? { musicalId: this.parseId(query.musicalId, 'musicalId') }
+        : {}),
+      ...(query.musical
+        ? {
+            musical: {
+              title: {
+                contains: query.musical,
+                mode: insensitive,
+              },
+            },
+          }
+        : {}),
+      ...(query.performanceId
+        ? { performanceId: this.parseId(query.performanceId, 'performanceId') }
+        : {}),
+      ...(query.seasonLabel
+        ? {
+            performance: {
+              seasonLabel: {
+                contains: query.seasonLabel,
+                mode: insensitive,
+              },
+            },
+          }
+        : {}),
+      ...(query.seatFloor
+        ? {
+            seatFloor: {
+              equals: query.seatFloor,
+              mode: insensitive,
+            },
+          }
+        : {}),
+      ...(query.seatSection
+        ? {
+            seatSection: {
+              equals: query.seatSection,
+              mode: insensitive,
+            },
+          }
+        : {}),
+      ...(query.seatRow
+        ? {
+            seatRow: {
+              equals: query.seatRow,
+              mode: insensitive,
+            },
+          }
+        : {}),
+      ...(query.seatNumber
+        ? {
+            seatNumber: {
+              equals: query.seatNumber,
+              mode: insensitive,
+            },
+          }
+        : {}),
+      ...(query.tagId
+        ? {
+            seatReviewTags: {
+              some: {
+                tagId: this.parseId(query.tagId, 'tagId'),
+              },
+            },
+          }
+        : {}),
+      ...(query.minViewRating
+        ? { viewRating: { gte: query.minViewRating } }
+        : {}),
+      ...(query.minSoundRating
+        ? { soundRating: { gte: query.minSoundRating } }
+        : {}),
+      ...(query.minComfortRating
+        ? { comfortRating: { gte: query.minComfortRating } }
+        : {}),
+      ...(query.minExpressionRating
+        ? { expressionRating: { gte: query.minExpressionRating } }
+        : {}),
+      ...(query.minStageVisibilityRating
+        ? {
+            stageVisibilityRating: {
+              gte: query.minStageVisibilityRating,
+            },
+          }
+        : {}),
+      ...(and.length > 0 ? { AND: and } : {}),
+    };
+
+    return where;
+  }
+
+  private buildFindAllOrderBy(sort: SeatReviewQueryDto['sort']) {
+    const ratingOrderBy: Prisma.SeatReviewOrderByWithRelationInput[] = [
+      { viewRating: 'desc' },
+      { soundRating: 'desc' },
+      { comfortRating: 'desc' },
+      { expressionRating: 'desc' },
+      { stageVisibilityRating: 'desc' },
+      { createdAt: 'desc' },
+    ];
+
+    switch (sort ?? 'latest') {
+      case 'oldest':
+        return {
+          createdAt: 'asc',
+        } satisfies Prisma.SeatReviewOrderByWithRelationInput;
+      case 'popular':
+        return [
+          { comments: { _count: 'desc' } },
+          { createdAt: 'desc' },
+        ] satisfies Prisma.SeatReviewOrderByWithRelationInput[];
+      case 'rating':
+        return ratingOrderBy;
+      case 'view':
+        return [
+          { viewRating: 'desc' },
+          { createdAt: 'desc' },
+        ] satisfies Prisma.SeatReviewOrderByWithRelationInput[];
+      case 'sound':
+        return [
+          { soundRating: 'desc' },
+          { createdAt: 'desc' },
+        ] satisfies Prisma.SeatReviewOrderByWithRelationInput[];
+      case 'comfort':
+        return [
+          { comfortRating: 'desc' },
+          { createdAt: 'desc' },
+        ] satisfies Prisma.SeatReviewOrderByWithRelationInput[];
+      case 'expression':
+        return [
+          { expressionRating: 'desc' },
+          { createdAt: 'desc' },
+        ] satisfies Prisma.SeatReviewOrderByWithRelationInput[];
+      case 'stageVisibility':
+        return [
+          { stageVisibilityRating: 'desc' },
+          { createdAt: 'desc' },
+        ] satisfies Prisma.SeatReviewOrderByWithRelationInput[];
+      case 'latest':
+      default:
+        return {
+          createdAt: 'desc',
+        } satisfies Prisma.SeatReviewOrderByWithRelationInput;
+    }
+  }
+
   private async assertPerformanceMatches(input: {
     performanceId: bigint;
     theaterId: bigint;
