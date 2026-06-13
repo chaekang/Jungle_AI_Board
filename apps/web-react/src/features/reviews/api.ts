@@ -1,5 +1,6 @@
 import { apiRequest } from "../../shared/api"
-import type { PublicSeatReview, SeatReviewListResponse, CreateSeatReviewPayload, UpdateSeatReviewPayload, MusicalOption, PerformanceOption, TheaterOption } from "./types"
+import { buildSeatReviewSearchPath } from "./review-search-query"
+import type { PublicSeatReview, SeatReviewListResponse, CreateSeatReviewPayload, UpdateSeatReviewPayload, MusicalOption, PerformanceOption, TheaterOption, SeatReviewSearchParams } from "./types"
 
 // 극장 목록 가져오기
 export function getTheaters() {
@@ -47,42 +48,9 @@ export function createSeatReview(input: CreateSeatReviewPayload, token: string) 
   )
 }
 
-type GetSeatReviewsParams = {
-  theaterId?: string
-  musicalId?: string
-  performanceId?: string
-  page?: number
-  limit?: number
-}
-
 // 좌석 리뷰 목록 가져오기
-export function getSeatReviews(params: GetSeatReviewsParams = {}) {
-  const searchParams = new URLSearchParams()
-
-  if (params.theaterId) {
-    searchParams.set("theaterId", params.theaterId)
-  }
-
-  if (params.musicalId) {
-    searchParams.set("musicalId", params.musicalId)
-  }
-
-  if (params.performanceId) {
-    searchParams.set("performanceId", params.performanceId)
-  }
-
-  if (params.page) {
-    searchParams.set("page", String(params.page))
-  }
-
-  if (params.limit) {
-    searchParams.set("limit", String(params.limit))
-  }
-
-  const queryString = searchParams.toString()
-  const path = queryString ? `/seat-reviews?${queryString}`: "/seat-reviews"  // 요청 경로가 있으면 특정 리뷰 조회, 없으면 전체 목록
-
-  return apiRequest<SeatReviewListResponse>(path)
+export function getSeatReviews(params: SeatReviewSearchParams = {}) {
+  return apiRequest<SeatReviewListResponse>(buildSeatReviewSearchPath(params))
 }
 
 // 리뷰 하나의 상세 정보 가져오기

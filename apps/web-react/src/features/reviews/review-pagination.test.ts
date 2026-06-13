@@ -50,6 +50,7 @@ const reviews = await loadAllSeatReviewPages(async ({ page, limit }) => {
     total,
     page: currentPage,
     limit: currentLimit,
+    hasNext: end < total,
   } satisfies SeatReviewListResponse;
 });
 

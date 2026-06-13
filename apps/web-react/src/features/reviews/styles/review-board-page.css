@@ -106,6 +106,7 @@
 .review-board-write-button,
 .review-board-chip,
 .review-board-filter-result,
+.review-board-pagination button,
 .review-board-sort-menu button {
   min-height: 34px;
   border: 1px solid #d8b8bf;
@@ -124,6 +125,7 @@
 
 .review-board-chip,
 .review-board-filter-result,
+.review-board-pagination button,
 .review-board-sort-menu button {
   font-size: 0.86rem;
 }
@@ -138,6 +140,7 @@
 .review-board-write-button:hover,
 .review-board-chip:hover,
 .review-board-filter-result:hover,
+.review-board-pagination button:not(:disabled):hover,
 .review-board-sort-menu button:hover {
   transform: translateY(-1px);
   border-color: #6f1d2a;
@@ -426,6 +429,32 @@
 
 .review-board-sort-actions button {
   min-width: 86px;
+}
+
+.review-board-result-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 0 12px;
+  color: #6d4d55;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.review-board-pagination {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.review-board-pagination button {
+  min-width: 58px;
+  padding: 0 12px;
+}
+
+.review-board-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .review-board-list {
@@ -979,6 +1008,11 @@
 
   .review-board-filter-result {
     width: 100%;
+  }
+
+  .review-board-result-summary {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .review-board-list {

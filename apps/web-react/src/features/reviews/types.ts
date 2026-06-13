@@ -98,6 +98,42 @@ export type ReviewTag = {
   type: string;
 }
 
+export type SeatReviewSearchSort =
+  | "latest"
+  | "oldest"
+  | "popular"
+  | "rating"
+  | "view"
+  | "sound"
+  | "comfort"
+  | "expression"
+  | "stageVisibility";
+
+export type SeatReviewSearchParams = {
+  q?: string;
+  theaterId?: string;
+  theater?: string;
+  musicalId?: string;
+  musical?: string;
+  performanceId?: string;
+  seasonLabel?: string;
+  seatFloor?: string;
+  seatSection?: string;
+  seatRow?: string;
+  seatNumber?: string;
+  tagId?: string;
+  tag?: string;
+  hasObstruction?: boolean;
+  minViewRating?: number;
+  minSoundRating?: number;
+  minComfortRating?: number;
+  minExpressionRating?: number;
+  minStageVisibilityRating?: number;
+  sort?: SeatReviewSearchSort;
+  page?: number;
+  limit?: number;
+}
+
 // 서버 응답 타입
 export type PublicSeatReview = {
   id: string;
@@ -142,4 +178,5 @@ export type SeatReviewListResponse = {
   total: number;
   page: number;
   limit: number;
+  hasNext: boolean;
 }
