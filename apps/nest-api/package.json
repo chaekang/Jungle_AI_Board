@@ -8,6 +8,7 @@
   "scripts": {
     "build": "nest build",
     "db:seed": "npx prisma db seed",
+    "db:backfill-tags": "node prisma/backfill-tags.js",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",

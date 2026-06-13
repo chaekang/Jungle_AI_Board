@@ -17,7 +17,7 @@ describe('TagsService', () => {
 
   const tag = {
     id: 2n,
-    name: 'great_view',
+    name: '시야좋음',
     type: 'seat_feature',
     createdAt: now,
   };
@@ -72,7 +72,7 @@ describe('TagsService', () => {
     await expect(service.findAll()).resolves.toEqual([
       {
         id: '2',
-        name: 'great_view',
+        name: '시야좋음',
         type: 'seat_feature',
       },
     ]);
@@ -97,7 +97,7 @@ describe('TagsService', () => {
       items: [
         {
           id: '11',
-          tags: [{ id: '2', name: 'great_view', type: 'seat_feature' }],
+          tags: [{ id: '2', name: '시야좋음', type: 'seat_feature' }],
         },
       ],
       total: 1,

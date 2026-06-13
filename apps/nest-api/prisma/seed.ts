@@ -80,16 +80,19 @@ async function main() {
 
   const tags = {
     greatView: await prisma.tag.create({
-      data: { name: "great_view", type: "seat_feature" },
+      data: { name: "시야좋음", type: "seat_feature" },
+    }),
+    obstructedView: await prisma.tag.create({
+      data: { name: "시야방해", type: "seat_feature" },
     }),
     strongSound: await prisma.tag.create({
-      data: { name: "strong_sound", type: "seat_feature" },
+      data: { name: "음향좋음", type: "seat_feature" },
     }),
     firstTimer: await prisma.tag.create({
-      data: { name: "first_timer", type: "viewing_purpose" },
+      data: { name: "첫관람추천", type: "viewing_purpose" },
     }),
     budgetPick: await prisma.tag.create({
-      data: { name: "budget_pick", type: "viewing_purpose" },
+      data: { name: "가성비", type: "viewing_purpose" },
     }),
   };
 

@@ -62,15 +62,15 @@ describe('SeatReviewsService tags', () => {
       {
         tag: {
           id: 2n,
-          name: 'great_view',
+          name: '시야좋음',
           type: 'seat_feature',
         },
       },
       {
         tag: {
           id: 4n,
-          name: 'first_timer',
-          type: 'purpose',
+          name: '첫관람추천',
+          type: 'viewing_purpose',
         },
       },
     ],
@@ -111,8 +111,8 @@ describe('SeatReviewsService tags', () => {
     await expect(service.create(user, createDto)).resolves.toMatchObject({
       id: '11',
       tags: [
-        { id: '2', name: 'great_view', type: 'seat_feature' },
-        { id: '4', name: 'first_timer', type: 'purpose' },
+        { id: '2', name: '시야좋음', type: 'seat_feature' },
+        { id: '4', name: '첫관람추천', type: 'viewing_purpose' },
       ],
     });
 
@@ -170,7 +170,7 @@ describe('SeatReviewsService tags', () => {
     await expect(
       service.update('11', user, { tagIds: ['2', '2'] }),
     ).resolves.toMatchObject({
-      tags: [{ id: '2', name: 'great_view', type: 'seat_feature' }],
+      tags: [{ id: '2', name: '시야좋음', type: 'seat_feature' }],
     });
 
     expect(prisma.seatReview.update).toHaveBeenCalledWith(
@@ -198,8 +198,8 @@ describe('SeatReviewsService tags', () => {
     await expect(service.findOne('11')).resolves.toMatchObject({
       id: '11',
       tags: [
-        { id: '2', name: 'great_view', type: 'seat_feature' },
-        { id: '4', name: 'first_timer', type: 'purpose' },
+        { id: '2', name: '시야좋음', type: 'seat_feature' },
+        { id: '4', name: '첫관람추천', type: 'viewing_purpose' },
       ],
     });
   });
