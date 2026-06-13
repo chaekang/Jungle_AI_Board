@@ -26,6 +26,7 @@ SIDE_KEYWORDS = {
     "left": ("왼쪽", "좌측", "왼블", "좌블"),
     "center": ("중앙", "가운데", "센터", "중블"),
     "right": ("오른쪽", "우측", "오블", "우블"),
+    "side": ("사블", "사이드블록", "사이드 통로", "극싸", "극사이드", "완전 사이드"),
 }
 RATING_KEYS = {
     "view": "view",
@@ -86,6 +87,25 @@ class ReviewSearchScope:
     exact_count: int
 
 
+@dataclass
+class SeatCandidate:
+    label: str
+    floor: str | None
+    section: str | None
+    row: str | None
+    side: str | None
+
+
+@dataclass
+class CandidateEvaluation:
+    candidate: SeatCandidate
+    filters: AgentFilters
+    search_scope: ReviewSearchScope
+    scored: list[CandidateScore]
+    evidence: list[EvidenceReview]
+    score: float
+
+
 def recommend_seat(request: SeatRecommendationRequest) -> SeatRecommendationResponse:
     client = NestClient()
     filters = _extract_filters(request, client)
@@ -97,6 +117,17 @@ def recommend_seat(request: SeatRecommendationRequest) -> SeatRecommendationResp
     if filters.theater_name:
         mcp = get_seat_layout(filters.theater_name)
         mcp_status = mcp.status
+
+    seat_candidates = _extract_seat_candidates(request.question)
+    if len(seat_candidates) >= 2:
+        return _compare_seat_candidates(
+            client,
+            request,
+            filters,
+            intent,
+            mcp_status,
+            seat_candidates,
+        )
 
     search_scope = _load_review_scope(client, filters, request.limit, intent)
     reviews = search_scope.reviews
@@ -132,7 +163,7 @@ def recommend_seat(request: SeatRecommendationRequest) -> SeatRecommendationResp
         descriptive_block,
         search_scope,
     )
-    recommendation = local_answer if intent == "obstruction_range" else rag_answer or local_answer
+    recommendation = local_answer if intent in {"obstruction_range", "op_assessment"} else rag_answer or local_answer
 
     return SeatRecommendationResponse(
         recommendation=recommendation,
@@ -164,6 +195,10 @@ def _extract_filters(request: SeatRecommendationRequest, client: NestClient) -> 
 
     seat_row = _extract_regex(question, r"(\d+|[A-Z가-힣]+)\s*(열|row)", lambda match: match.group(1).upper())
 
+    if _asks_op_seat_question(question):
+        seat_row = "OP"
+        priorities = list(dict.fromkeys([*priorities, "lowObstruction", "stageVisibility"]))
+
     if _asks_range(question) and seat_row and _parse_int(seat_row) is None:
         seat_row = None
 
@@ -181,7 +216,315 @@ def _extract_filters(request: SeatRecommendationRequest, client: NestClient) -> 
     )
 
 
+def _extract_seat_candidates(question: str) -> list[SeatCandidate]:
+    candidates: list[SeatCandidate] = []
+    pattern = re.compile(
+        r"(?P<floor>\d+)\s*(?P<floor_unit>층|F)\s*"
+        r"(?P<block>좌블|중블|우블|좌측|중앙|오른쪽|왼쪽|[A-Z]\s*(?:구역|블록|블럭))\s*"
+        r"(?P<row>\d+)\s*열",
+        flags=re.IGNORECASE,
+    )
+
+    for match in pattern.finditer(question):
+        block = re.sub(r"\s+", "", match.group("block"))
+        section = _candidate_section(block)
+        side = _candidate_side(block) or _section_to_side(section)
+        floor = f"{match.group('floor')}{_floor_unit(match.group('floor_unit'))}"
+        row = match.group("row")
+        candidates.append(
+            SeatCandidate(
+                label=f"{floor} {_candidate_block_label(block)} {row}열",
+                floor=floor,
+                section=section,
+                row=row,
+                side=side,
+            )
+        )
+
+    row_block_pattern = re.compile(
+        r"(?P<row>\d+)\s*열\s*"
+        r"(?P<block>사이드\s*블록\s*통로석|사이드\s*블록|사이드\s*통로|극\s*사이드|완전\s*사이드|극싸|사블통|사블|좌블통|중블통|우블통|좌블|중블|우블|좌측|중앙|오른쪽|왼쪽|[A-Z]\s*(?:구역|블록|블럭))",
+        flags=re.IGNORECASE,
+    )
+
+    for match in row_block_pattern.finditer(question):
+        block = re.sub(r"\s+", "", match.group("block"))
+        section = _candidate_section(block)
+        side = _candidate_side(block) or _section_to_side(section)
+        row = match.group("row")
+        candidates.append(
+            SeatCandidate(
+                label=f"{row}열 {_candidate_block_label(block)}",
+                floor=None,
+                section=section,
+                row=row,
+                side=side,
+            )
+        )
+
+    return candidates or _extract_floor_only_candidates(question) or _extract_side_only_candidates(question)
+
+
+def _extract_floor_only_candidates(question: str) -> list[SeatCandidate]:
+    if not _asks_floor_comparison(question):
+        return []
+
+    candidates: list[SeatCandidate] = []
+    pattern = re.compile(
+        r"(?P<floor>\d+)\s*(?P<floor_unit>층|F)\s*"
+        r"(?P<row>(?:\d+\s*열)|앞열|중열|뒷열|후열)?",
+        flags=re.IGNORECASE,
+    )
+
+    for match in pattern.finditer(question):
+        floor = f"{match.group('floor')}{_floor_unit(match.group('floor_unit'))}"
+        row_text = (match.group("row") or "").replace(" ", "")
+        row = row_text.removesuffix("열") if row_text and row_text[0].isdigit() else None
+        label = f"{floor} {row_text}".strip()
+
+        candidates.append(
+            SeatCandidate(
+                label=label,
+                floor=floor,
+                section=None,
+                row=row,
+                side=None,
+            )
+        )
+
+    return candidates if len(candidates) >= 2 else []
+
+
+def _asks_floor_comparison(question: str) -> bool:
+    return _asks_side_comparison(question) and len(re.findall(r"\d+\s*(?:층|F)", question, flags=re.IGNORECASE)) >= 2
+
+
+def _extract_side_only_candidates(question: str) -> list[SeatCandidate]:
+    if not _asks_side_comparison(question):
+        return []
+
+    candidates: list[SeatCandidate] = []
+    for label, side in (
+        ("왼블", "left"),
+        ("중블", "center"),
+        ("우블", "right"),
+    ):
+        if _mentions_side_candidate(question, label, side):
+            candidates.append(
+                SeatCandidate(
+                    label=label,
+                    floor=None,
+                    section=None,
+                    row=None,
+                    side=side,
+                )
+            )
+
+    return candidates
+
+
+def _asks_side_comparison(question: str) -> bool:
+    return any(keyword in question for keyword in ("나아", "나을까", "골라", "중에서", "vs", "VS"))
+
+
+def _mentions_side_candidate(question: str, label: str, side: str) -> bool:
+    aliases = {
+        "left": ("왼블", "좌블", "왼쪽", "좌측"),
+        "center": ("중블", "중앙"),
+        "right": ("우블", "오블", "오른쪽", "우측"),
+        "side": ("사블", "사블통", "사이드블록", "사이드통로", "극싸", "극사이드", "완전사이드"),
+    }
+    return label in question or any(alias in question for alias in aliases[side])
+
+
+def _candidate_section(block: str) -> str | None:
+    match = re.match(r"([A-Z])(?:구역|블록|블럭)", block, flags=re.IGNORECASE)
+    return match.group(1).upper() if match else None
+
+
+def _candidate_side(block: str) -> str | None:
+    if block in {"좌블", "좌블통", "좌측", "왼쪽"}:
+        return "left"
+    if block in {"중블", "중블통", "중앙"}:
+        return "center"
+    if block in {"우블", "우블통", "오른쪽"}:
+        return "right"
+    if block in {"사블", "사블통", "사이드블록", "사이드블록통로석", "사이드통로", "극싸", "극사이드", "완전사이드"}:
+        return "side"
+    return None
+
+
+def _candidate_block_label(block: str) -> str:
+    if block in {"좌블", "좌블통"}:
+        return "좌블"
+    if block in {"중블", "중블통"}:
+        return "중블"
+    if block in {"우블", "우블통"}:
+        return "우블"
+    if block in {"사블", "사블통", "사이드블록", "사이드블록통로석", "사이드통로"}:
+        return "사블통" if "통" in block else "사블"
+    if block in {"극싸", "극사이드", "완전사이드"}:
+        return "극싸"
+    section = _candidate_section(block)
+    if section:
+        return f"{section}구역"
+    return block
+
+
+def _compare_seat_candidates(
+    client: NestClient,
+    request: SeatRecommendationRequest,
+    base_filters: AgentFilters,
+    intent: str,
+    mcp_status: str,
+    candidates: list[SeatCandidate],
+) -> SeatRecommendationResponse:
+    evaluations = [
+        _evaluate_seat_candidate(client, request, base_filters, intent, candidate)
+        for candidate in candidates[:3]
+    ]
+    winner = max(evaluations, key=lambda evaluation: evaluation.score)
+    best = winner.scored[0].review if winner.scored else None
+    official_section = _select_official_section(winner.search_scope.reviews, best)
+    descriptive_block = winner.candidate.side or _select_descriptive_block(
+        winner.filters,
+        official_section,
+        best,
+    )
+    evidence = _merge_candidate_evidence(evaluations, request.limit)
+
+    return SeatRecommendationResponse(
+        recommendation=_build_floor_comparison_answer(evaluations, winner)
+        if _is_floor_candidate_comparison(evaluations)
+        else _build_candidate_comparison_answer(
+            request.question,
+            evaluations,
+            winner,
+        ),
+        officialSection=official_section,
+        descriptiveBlock=descriptive_block,
+        direction=_direction_label(descriptive_block),
+        reasons=_build_candidate_comparison_reasons(evaluations, winner),
+        cautions=_build_cautions(evidence, official_section),
+        evidenceReviews=evidence,
+        filters=winner.filters,
+        mcpStatus=mcp_status,
+        ragStatus="skipped",
+        ragAnswer=None,
+    )
+
+
+def _is_floor_candidate_comparison(evaluations: list[CandidateEvaluation]) -> bool:
+    return len(evaluations) >= 2 and all(
+        evaluation.candidate.floor and not evaluation.candidate.side and not evaluation.candidate.section
+        for evaluation in evaluations
+    )
+
+
+def _evaluate_seat_candidate(
+    client: NestClient,
+    request: SeatRecommendationRequest,
+    base_filters: AgentFilters,
+    intent: str,
+    candidate: SeatCandidate,
+) -> CandidateEvaluation:
+    candidate_filters = base_filters.model_copy(
+        update={
+            "seat_floor": candidate.floor or base_filters.seat_floor,
+            "seat_section": candidate.section,
+            "seat_row": candidate.row,
+            "seat_number": None,
+            "side": candidate.side or base_filters.side,
+        }
+    )
+    search_scope = _load_review_scope(client, candidate_filters, request.limit, intent)
+    scored = sorted(
+        (_score_review(review, candidate_filters) for review in search_scope.reviews),
+        key=lambda item: item.score,
+        reverse=True,
+    )
+    evidence = [_to_evidence(item.review) for item in scored[: request.limit]]
+    if _is_floor_only_candidate(candidate):
+        score = _score_floor_candidate(evidence)
+    else:
+        score = (scored[0].score if scored else 0) + _candidate_context_bonus(
+            request.question,
+            candidate,
+        )
+
+    return CandidateEvaluation(
+        candidate=candidate,
+        filters=candidate_filters,
+        search_scope=search_scope,
+        scored=scored,
+        evidence=evidence,
+        score=score,
+    )
+
+
+def _is_floor_only_candidate(candidate: SeatCandidate) -> bool:
+    return bool(candidate.floor and not candidate.section and not candidate.side)
+
+
+def _score_floor_candidate(evidence: list[EvidenceReview]) -> float:
+    if not evidence:
+        return 0.0
+
+    view = _average_rating(evidence, "view")
+    stage = _average_rating(evidence, "stageVisibility")
+    sound = _average_rating(evidence, "sound")
+    comfort = _average_rating(evidence, "comfort")
+    expression = _average_rating(evidence, "expression")
+
+    return (view * 2) + (stage * 1.5) + (sound * 1.5) + (comfort * 0.8) + (expression * 0.5)
+
+
+def _candidate_context_bonus(question: str, candidate: SeatCandidate) -> float:
+    score = 0.0
+    row = _parse_int(candidate.row)
+    wants_center_context = _asks_one_watch_question(question) or _has_focus_context(question)
+    is_floor_only_candidate = candidate.floor and not candidate.section and not candidate.side
+
+    if candidate.side == "center":
+        score += 1.0
+        if wants_center_context:
+            score += 3.0
+    elif wants_center_context:
+        score -= 1.0
+
+    if row is not None and not is_floor_only_candidate:
+        if row <= 5:
+            score += 2.0
+        elif row <= 10:
+            score += 1.2
+        else:
+            score += 0.4
+
+    return score
+
+
+def _merge_candidate_evidence(
+    evaluations: list[CandidateEvaluation],
+    limit: int,
+) -> list[EvidenceReview]:
+    evidence: list[EvidenceReview] = []
+    seen: set[str] = set()
+
+    for evaluation in sorted(evaluations, key=lambda item: item.score, reverse=True):
+        for review in evaluation.evidence:
+            if review.id in seen:
+                continue
+            seen.add(review.id)
+            evidence.append(review)
+            if len(evidence) >= limit:
+                return evidence
+
+    return evidence
+
+
 def _detect_intent(question: str) -> str:
+    if _asks_op_seat_question(question):
+        return "op_assessment"
     if _asks_obstruction_range(question):
         return "obstruction_range"
     if any(keyword in question for keyword in ("추천", "골라", "어디", "좋은 자리", "좋을까")):
@@ -199,6 +542,56 @@ def _asks_obstruction_range(question: str) -> bool:
     return _asks_range(question) and any(
         keyword in question for keyword in ("시야방해", "시야 방해", "시방", "가림", "난간")
     )
+
+
+def _asks_op_seat_question(question: str) -> bool:
+    compact_question = _compact(question)
+    return "오피" in compact_question or re.search(r"\bop\s*석?\b", question, flags=re.IGNORECASE) is not None
+
+
+def _asks_one_watch_question(question: str) -> bool:
+    compact_question = _compact(question)
+    return any(keyword in compact_question for keyword in ("자첫자막", "자첫", "한번만", "한번만볼"))
+
+
+def _has_focus_context(question: str) -> bool:
+    return _extract_focus_subject(question) is not None or any(
+        keyword in question
+        for keyword in (
+            "본진",
+            "최애",
+            "최애배역",
+            "최애배우",
+            "최애캐",
+            "애배",
+            "차애",
+        )
+    )
+
+
+def _extract_focus_subject(question: str) -> str | None:
+    focus_marker = r"(?:본진|최애배역|최애배우|최애캐|최애|애배|차애)"
+    suffix = r"(?:라서|라|이라서|이라|이면|이라면|이고|인데|이라면요|이면요)?"
+
+    before_match = re.search(
+        rf"(?:^|[\s,])(?P<subject>[가-힣A-Za-z0-9]+?)(?:이|가|은|는)?\s*{focus_marker}{suffix}",
+        question,
+    )
+    if before_match:
+        return before_match.group("subject")
+
+    after_match = re.search(
+        rf"(?:^|[\s,]){focus_marker}(?:은|는|이|가)?\s+(?P<subject>[가-힣A-Za-z0-9]+?)(?=\s|이면|이라면|이고|인데|,|\.|\?|$)",
+        question,
+    )
+    if after_match:
+        return after_match.group("subject")
+
+    action_match = re.search(
+        r"(?:^|[\s,])(?P<subject>[가-힣A-Za-z0-9]{2,12})(?:을|를|이|가|은|는)?\s*(?:보러|위주로|중심으로|잡고)",
+        question,
+    )
+    return action_match.group("subject") if action_match else None
 
 
 def _safe_get(client: NestClient, path: str) -> list[dict]:
@@ -260,6 +653,8 @@ def _extract_priorities(question: str) -> list[str]:
 
 def _extract_side(question: str):
     for side, keywords in SIDE_KEYWORDS.items():
+        if side not in {"left", "center", "right"}:
+            continue
         if any(keyword in question for keyword in keywords):
             return side
     return None
@@ -304,9 +699,9 @@ def _to_search_params(
         "seatSection": filters.seat_section,
         "seatRow": filters.seat_row,
         "seatNumber": filters.seat_number,
-        "tag": "시야방해" if intent == "obstruction_range" else None,
+        "tag": "시야방해" if intent in {"obstruction_range", "op_assessment"} else None,
         "hasObstruction": True
-        if intent == "obstruction_range"
+        if intent in {"obstruction_range", "op_assessment"}
         else False
         if "lowObstruction" in filters.priorities
         else None,
@@ -337,6 +732,14 @@ def _load_review_scope(
 
     broad_filters = filters.model_copy(update={"seat_row": None, "seat_number": None})
     broad_reviews = _search_reviews(client, broad_filters, 50)
+
+    if not broad_reviews:
+        return ReviewSearchScope(
+            reviews=exact_reviews,
+            label="exact",
+            exact_count=len(exact_reviews),
+        )
+
     nearby_reviews = _nearby_row_reviews(broad_reviews, filters.seat_row)
 
     if nearby_reviews:
@@ -412,8 +815,12 @@ def _score_review(review: dict, filters: AgentFilters) -> CandidateScore:
     tags = [tag.get("name", "") for tag in review.get("tags", [])]
     if "lowObstruction" in filters.priorities and any("시야방해" in tag or "사이드" in tag for tag in tags):
         score -= 4
-    if filters.side and _section_to_side(review.get("seat", {}).get("section")) == filters.side:
-        score += 2
+    if filters.side:
+        review_side = _section_to_side(review.get("seat", {}).get("section"))
+        if filters.side == "side" and review_side in {"left", "right"}:
+            score += 2
+        elif review_side == filters.side:
+            score += 2
     if filters.seat_row:
         target_row = _parse_int(filters.seat_row)
         review_row = _parse_int(review.get("seat", {}).get("row"))
@@ -476,6 +883,7 @@ def _direction_label(block: str | None) -> str:
         "left": "왼쪽블록",
         "center": "중앙블록",
         "right": "오른쪽블록",
+        "side": "사이드블록",
     }.get(block or "", "근거 후기 중심")
 
 
@@ -489,6 +897,8 @@ def _build_answer(
 ) -> str:
     if intent == "obstruction_range":
         return _build_obstruction_range(filters, search_scope.reviews)
+    if intent == "op_assessment":
+        return _build_op_seat_assessment(evidence)
     if intent == "assessment":
         return _build_assessment(filters, evidence, search_scope)
     return _build_recommendation(official_section, block, evidence)
@@ -522,15 +932,35 @@ def _build_obstruction_range(filters: AgentFilters, reviews: list[dict]) -> str:
     theater = filters.theater_name or "해당 극장"
 
     if filters.seat_floor and filters.seat_floor in ranges:
-        _, max_row, count = ranges[filters.seat_floor]
-        return f"{theater} {filters.seat_floor}은 시야방해 태그가 {max_row}열까지 확인됩니다. 이건 {filters.seat_floor} 전체가 다 방해된다는 뜻이 아니라, 후기에서 난간이나 가림 같은 방해 요소가 기록된 좌석이 {max_row}열까지 있었다는 의미예요. 현재 확인한 시야방해 후기는 {count}개입니다."
+        _, max_row, _ = ranges[filters.seat_floor]
+        return f"{theater} {filters.seat_floor}은 시야방해 태그가 {max_row}열까지 확인됩니다. 이건 {filters.seat_floor} 전체가 다 방해된다는 뜻이 아니라, 후기에서 난간이나 가림 같은 방해 요소가 기록된 좌석이 {max_row}열까지 있었다는 의미예요."
 
     floor_text = ", ".join(
         f"{floor}은 {min_row}열부터 {max_row}열까지"
         for floor, (min_row, max_row, _) in sorted(ranges.items(), key=lambda item: _parse_int(item[0]) or 0)
     )
-    total = sum(count for _, _, count in ranges.values())
-    return f"{theater}은 시야방해 태그가 {floor_text} 확인됩니다. 전체 좌석이 다 방해된다는 뜻은 아니고, 방해 요소가 기록된 후기가 그 범위까지 있다는 의미예요. 현재 확인한 시야방해 후기는 {total}개입니다."
+    return f"{theater}은 시야방해 태그가 {floor_text} 확인됩니다. 전체 좌석이 다 방해된다는 뜻은 아니고, 방해 요소가 기록된 후기가 그 범위까지 있다는 의미예요."
+
+
+def _build_op_seat_assessment(evidence: list[EvidenceReview]) -> str:
+    if not evidence:
+        return "OP석은 무대와 너무 가까운 만큼 가림 변수가 큰 자리라, 정확한 후기가 없으면 추천하기 어렵습니다. 표정 가까움보다 무대 전체와 동선을 안정적으로 보고 싶다면 일반 1층 중앙 쪽을 먼저 보세요."
+
+    view_average = _average_rating(evidence, "view")
+    stage_average = _average_rating(evidence, "stageVisibility")
+    obstruction_count = sum(1 for review in evidence if any("시야방해" in tag or "가림" in tag for tag in review.tags))
+
+    if obstruction_count or view_average < 3.5 or stage_average < 3.5:
+        return (
+            "OP석은 이번 조건에서는 추천하기 어렵습니다. 가까워서 표정은 잘 보일 수 있지만, "
+            "가림이나 무대 하단/동선 누락 리스크가 커 보여요. 특히 지앤하처럼 무대 전체와 동선을 같이 봐야 하는 극이면 "
+            "OP보다 일반 1층 중앙 쪽이 더 안전합니다."
+        )
+
+    return (
+        "OP석도 선택지는 될 수 있지만, 표정 가까움을 최우선으로 볼 때만 추천합니다. "
+        "가림이 걱정된다면 OP보다 일반 1층 중앙 쪽이 더 안정적입니다."
+    )
 
 
 def _build_assessment(
@@ -599,6 +1029,190 @@ def _build_recommendation(official_section: str | None, block: str | None, evide
     if evidence:
         return "근거 후기의 평점이 높은 좌석 범위부터 확인하는 편이 좋습니다."
     return "조건에 맞는 후기가 부족해 특정 구역보다 검색 범위를 넓히는 편이 좋습니다."
+
+
+def _build_candidate_comparison_answer(
+    question: str,
+    evaluations: list[CandidateEvaluation],
+    winner: CandidateEvaluation,
+) -> str:
+    others = [
+        evaluation
+        for evaluation in evaluations
+        if evaluation.candidate.label != winner.candidate.label
+    ]
+    intro = f"둘 중에서는 {winner.candidate.label}을 추천합니다."
+    focus_subject = _extract_focus_subject(question)
+    has_focus_context = _has_focus_context(question)
+
+    if winner.candidate.side == "center" and (_asks_one_watch_question(question) or has_focus_context):
+        if focus_subject and _asks_one_watch_question(question):
+            reason = f"한 번만 볼 예정이고 {focus_subject}를 중심으로 본다면, 앞열감보다 정면에서 전체 동선과 등장 장면을 놓치지 않는 쪽이 낫습니다."
+        elif focus_subject:
+            reason = f"{focus_subject}를 중심으로 본다면, 가까운 사이드 앞열보다 정면에서 전체 동선과 등장 장면을 안정적으로 보는 쪽이 낫습니다."
+        elif _asks_one_watch_question(question):
+            reason = "한 번만 볼 예정이면 앞열감보다 정면에서 무대 전체와 동선을 안정적으로 보는 쪽이 낫습니다."
+        else:
+            reason = "본진이나 최애를 중심으로 보더라도 사이드 앞열보다 정면에서 전체 동선과 시야 균형을 잡는 쪽이 더 안정적입니다."
+    elif winner.candidate.row and any(other.candidate.row for other in others):
+        reason = "후기 점수와 좌석 위치를 같이 보면 이 후보 쪽의 균형이 더 좋습니다."
+    elif winner.candidate.side and any(other.candidate.side for other in others):
+        reason = "양쪽 블록 후기를 따로 비교하면 이쪽이 시야와 동선 면에서 더 안정적입니다."
+    else:
+        reason = "근거 후기의 평점과 좌석 방향 조건을 비교했을 때 이 후보가 더 안정적입니다."
+
+    tradeoffs = " ".join(
+        _candidate_tradeoff_summary(evaluation)
+        for evaluation in [winner, *others]
+    )
+
+    return f"{intro} {reason} {tradeoffs}".strip()
+
+
+def _build_floor_comparison_answer(
+    evaluations: list[CandidateEvaluation],
+    winner: CandidateEvaluation,
+) -> str:
+    others = [
+        evaluation
+        for evaluation in evaluations
+        if evaluation.candidate.label != winner.candidate.label
+    ]
+    other = others[0] if others else None
+
+    parts = [
+        f"둘 중에서는 {winner.candidate.label}을 추천합니다.",
+        f"시야는 {_floor_view_phrase(winner)}.",
+        f"자리는 {_floor_seat_phrase(winner)}.",
+        f"음향은 {_floor_sound_phrase(winner)}.",
+    ]
+
+    if other:
+        parts.append(f"{other.candidate.label}은 {_floor_tradeoff_phrase(other)}.")
+
+    return " ".join(parts)
+
+
+def _floor_view_phrase(evaluation: CandidateEvaluation) -> str:
+    view_average = _average_rating(evaluation.evidence, "view")
+    stage_average = _average_rating(evaluation.evidence, "stageVisibility")
+    row_text = evaluation.candidate.label
+
+    if "뒷열" in row_text or (view_average >= 3.8 and stage_average >= 4):
+        return "무대 전체와 동선을 안정적으로 보기 좋은 편입니다"
+    if view_average >= 3.8:
+        return "시야 자체는 무난한 편입니다"
+    return "거리감이나 각도 때문에 세부 표정은 덜 또렷할 수 있습니다"
+
+
+def _floor_seat_phrase(evaluation: CandidateEvaluation) -> str:
+    comfort_average = _average_rating(evaluation.evidence, "comfort")
+    row = _parse_int(evaluation.candidate.row)
+
+    if row is not None and row <= 3 and evaluation.candidate.floor not in {"1층", "1F"}:
+        return "앞쪽이어도 층이 높아 무대와의 거리감은 남는 자리입니다"
+    if "뒷열" in evaluation.candidate.label:
+        return "앞열감은 덜하지만 한눈에 보기 편한 자리입니다"
+    if comfort_average >= 4:
+        return "시야와 착석감의 균형이 괜찮은 편입니다"
+    return "가까움보다는 전체 관람 안정성 기준으로 봐야 하는 자리입니다"
+
+
+def _floor_sound_phrase(evaluation: CandidateEvaluation) -> str:
+    sound_average = _average_rating(evaluation.evidence, "sound")
+
+    if sound_average >= 4.5:
+        return "소리가 객석 안에서 꽉 차게 들릴 가능성이 큽니다"
+    if sound_average >= 3.8:
+        return "크게 불리하지 않은 편입니다"
+    return "조금 멀게 느껴질 수 있습니다"
+
+
+def _floor_tradeoff_phrase(evaluation: CandidateEvaluation) -> str:
+    view_average = _average_rating(evaluation.evidence, "view")
+    sound_average = _average_rating(evaluation.evidence, "sound")
+
+    if evaluation.candidate.floor and evaluation.candidate.floor not in {"1층", "1F"}:
+        return "전체 구도는 보이지만 층이 높아 거리감이 더 있고 음향도 멀게 느껴질 수 있습니다"
+    if view_average < 3.5 or sound_average < 3.5:
+        return "조건에 따라 시야나 음향에서 아쉬움이 생길 수 있습니다"
+    return "장점은 있지만 이번 비교에서는 우선순위가 조금 낮습니다"
+
+
+def _candidate_tradeoff_summary(evaluation: CandidateEvaluation) -> str:
+    return (
+        f"{evaluation.candidate.label}{_topic_particle(evaluation.candidate.label)} "
+        f"장점은 {_candidate_advantage_phrase(evaluation)}. "
+        f"단점은 {_candidate_downside_phrase(evaluation)}."
+    )
+
+
+def _topic_particle(value: str) -> str:
+    last = next((char for char in reversed(value.strip()) if char.strip()), "")
+    code = ord(last) - ord("가")
+    if 0 <= code <= ord("힣") - ord("가"):
+        return "은" if code % 28 else "는"
+    return "은"
+
+
+def _candidate_advantage_phrase(evaluation: CandidateEvaluation) -> str:
+    row = _parse_int(evaluation.candidate.row)
+
+    if evaluation.candidate.side == "center":
+        return "정면 시야라 무대 전체와 동선을 안정적으로 보기 좋습니다"
+    if "극싸" in evaluation.candidate.label:
+        return "가장 앞쪽이라 표정과 디테일을 아주 가까이 볼 수 있습니다"
+    if evaluation.candidate.side == "side":
+        if row is not None and row <= 3:
+            return "앞열이라 표정이 가깝고 통로석이면 드나들기 편합니다"
+        return "사이드블록 특유의 가까운 각도와 통로 접근성이 있습니다"
+    if evaluation.candidate.side in {"left", "right"}:
+        if row is not None and row <= 5:
+            return "앞열감이 있고 배우 표정을 가까이 볼 수 있습니다"
+        return "특정 동선이나 배우를 가까운 각도로 볼 수 있습니다"
+    if row is not None and row <= 5:
+        return "무대와 배우를 가까이 볼 수 있습니다"
+    return "후기 기준 시야 균형이 괜찮습니다"
+
+
+def _candidate_downside_phrase(evaluation: CandidateEvaluation) -> str:
+    row = _parse_int(evaluation.candidate.row)
+
+    if evaluation.candidate.side == "center":
+        if row is not None and row >= 8:
+            return "앞열보다 표정 집중감은 덜합니다"
+        return "좌석에 따라 가격 대비 가까움은 덜할 수 있습니다"
+    if "극싸" in evaluation.candidate.label:
+        return "무대가 넓은 극장에서는 반대편 동선과 전체 구도가 많이 빠질 수 있습니다"
+    if evaluation.candidate.side == "side":
+        return "사이드라 반대편 동선이나 무대 하단이 일부 빠질 수 있습니다"
+    if evaluation.candidate.side in {"left", "right"}:
+        return "한쪽으로 치우쳐 반대편 장면을 따라가기 불편할 수 있습니다"
+    if row is not None and row <= 3:
+        return "가까운 대신 무대 전체가 한눈에 덜 들어올 수 있습니다"
+    return "정확한 위치에 따라 체감 차이가 날 수 있습니다"
+
+
+def _build_candidate_comparison_reasons(
+    evaluations: list[CandidateEvaluation],
+    winner: CandidateEvaluation,
+) -> list[str]:
+    reasons = [
+        f"후보 좌석 {len(evaluations)}개를 각각 검색해서 비교했습니다.",
+        f"{winner.candidate.label}의 점수가 가장 높았습니다.",
+    ]
+
+    for evaluation in evaluations:
+        if evaluation.search_scope.exact_count:
+            reasons.append(
+                f"{evaluation.candidate.label}은 정확히 맞는 후기 {evaluation.search_scope.exact_count}개를 우선 반영했습니다."
+            )
+        elif evaluation.evidence:
+            reasons.append(
+                f"{evaluation.candidate.label}은 주변 좌석 후기를 보조 근거로 반영했습니다."
+            )
+
+    return reasons
 
 
 def _build_reasons(
