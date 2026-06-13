@@ -21,6 +21,8 @@ lerna-debug.log*
 
 # Tests
 .nyc_output/
+.pytest_cache/
+pytest-cache-files-*/
 
 # IDEs and editors
 /.idea
@@ -44,6 +46,7 @@ lerna-debug.log*
 .env.test.local
 .env.production.local
 .env.local
+docker-compose.override.yml
 
 # temp directory
 .temp
