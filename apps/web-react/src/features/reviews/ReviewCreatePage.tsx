@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import type { FocusEvent, SubmitEvent } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { useReviewMetadata } from "./hooks/useReviewMetadata"
+import { getMcpSeatLayout } from "../mcp/api"
+import type { McpSeatLayout } from "../mcp/types"
 import {
   getTheaterSeatLayout,
   makeFloorSectionKey,
@@ -90,6 +92,9 @@ export default function ReviewCreatePage() {
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([])
   const [isLoadingTags, setIsLoadingTags] = useState(true)
   const [tagError, setTagError] = useState("")
+  const [mcpLayout, setMcpLayout] = useState<McpSeatLayout | null>(null)
+  const [mcpError, setMcpError] = useState("")
+  const [isLoadingMcpLayout, setIsLoadingMcpLayout] = useState(false)
   const isSubmittingRef = useRef(false)
 
   const { theaters, workOptions, performances, isLoadingMetadata, isLoadingPerformances, error } =
@@ -111,6 +116,12 @@ export default function ReviewCreatePage() {
   )
 
   const seatLayout = useMemo(() => getTheaterSeatLayout(selectedTheater), [selectedTheater])
+  const selectedMcpFloor = seatLocation.seatFloor
+    ? mcpLayout?.sectionsByFloor[seatLocation.seatFloor] ?? []
+    : []
+  const selectedMcpBlocks = seatLocation.seatFloor
+    ? mcpLayout?.aiBlocksByFloor[seatLocation.seatFloor] ?? []
+    : []
   const needsOfficialSection = hasOfficialSections(seatLayout)
   const sections = seatLocation.seatFloor
     ? seatLayout.sectionsByFloor[seatLocation.seatFloor] ?? []
@@ -190,6 +201,44 @@ export default function ReviewCreatePage() {
       isMounted = false
     }
   }, [])
+
+  useEffect(() => {
+    if (!selectedTheater?.name) {
+      setMcpLayout(null)
+      setMcpError("")
+      return
+    }
+
+    let isMounted = true
+    const theaterName = selectedTheater.name
+
+    async function loadMcpLayout() {
+      try {
+        setMcpError("")
+        setIsLoadingMcpLayout(true)
+        const layout = await getMcpSeatLayout(theaterName)
+
+        if (isMounted) {
+          setMcpLayout(layout)
+        }
+      } catch (err) {
+        if (isMounted) {
+          setMcpLayout(null)
+          setMcpError(err instanceof Error ? err.message : "좌석 보조 정보를 불러오지 못했습니다.")
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingMcpLayout(false)
+        }
+      }
+    }
+
+    void loadMcpLayout()
+
+    return () => {
+      isMounted = false
+    }
+  }, [selectedTheater])
 
   useEffect(() => {
     if (!reviewId) {
@@ -480,6 +529,94 @@ export default function ReviewCreatePage() {
                     {section.label}
                   </button>
                 ))}
+              </div>
+            </div>
+          ) : null}
+
+          {selectedTheater ? (
+            <div className="review-create-row review-create-row--mcp">
+              <span className="review-create-label">보조</span>
+              <div className="review-create-mcp-helper">
+                <div className="review-create-mcp-head">
+                  <strong>{mcpLayout?.canonicalTheaterName ?? selectedTheater.name}</strong>
+                  <span>
+                    {isLoadingMcpLayout
+                      ? "조회 중"
+                      : mcpLayout
+                        ? mcpLayout.isFallback
+                          ? "fallback"
+                          : mcpLayout.cached
+                            ? "cache hit"
+                            : "cache miss"
+                        : "기본 입력"}
+                  </span>
+                </div>
+                {mcpError ? <p>{mcpError}</p> : null}
+                {mcpLayout ? (
+                  <>
+                    <div className="review-create-mcp-group">
+                      <span>층</span>
+                      <div>
+                        {mcpLayout.floors.map((floor) => (
+                          <button
+                            key={floor.value}
+                            className="review-create-chip"
+                            type="button"
+                            aria-pressed={seatLocation.seatFloor === floor.value}
+                            onClick={() => {
+                              setSeatLocation({
+                                ...seatLocation,
+                                seatFloor: floor.value,
+                                seatSection: "",
+                                seatRow: "",
+                                seatNumber: "",
+                              })
+                              setOpenSeatDropdown(null)
+                            }}
+                          >
+                            {floor.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="review-create-mcp-group">
+                      <span>공식 구역</span>
+                      <div>
+                        {selectedMcpFloor.length > 0 ? (
+                          selectedMcpFloor.map((section) => (
+                            <button
+                              key={section.value}
+                              className="review-create-chip"
+                              type="button"
+                              aria-pressed={seatLocation.seatSection === section.value}
+                              onClick={() => {
+                                setSeatLocation({
+                                  ...seatLocation,
+                                  seatSection: section.value,
+                                  seatRow: "",
+                                  seatNumber: "",
+                                })
+                                setOpenSeatDropdown(null)
+                              }}
+                            >
+                              {section.label}
+                            </button>
+                          ))
+                        ) : (
+                          <span>없음</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="review-create-mcp-group">
+                      <span>설명용 블록</span>
+                      <div>
+                        {selectedMcpBlocks.map((block) => (
+                          <span key={block.value}>{block.label}</span>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : null}
               </div>
             </div>
           ) : null}

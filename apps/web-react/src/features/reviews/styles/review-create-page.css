@@ -65,6 +65,10 @@
   gap: 10px 12px;
 }
 
+.review-create-row--mcp {
+  align-items: start;
+}
+
 .review-create-label,
 .review-create-rating-label {
   padding-top: 11px;
@@ -340,6 +344,63 @@
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
+}
+
+.review-create-mcp-helper {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  border: 1px solid #eadde0;
+  border-radius: 18px;
+  background: #fffafa;
+  padding: 12px;
+}
+
+.review-create-mcp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.review-create-mcp-head strong {
+  color: #5d1521;
+}
+
+.review-create-mcp-head span,
+.review-create-mcp-group > span,
+.review-create-mcp-helper p {
+  color: #8a6870;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.review-create-mcp-helper p {
+  margin: 0;
+}
+
+.review-create-mcp-group {
+  display: grid;
+  gap: 6px;
+}
+
+.review-create-mcp-group div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.review-create-mcp-group div > span {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #eadde0;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #6f1d2a;
+  padding: 0 10px;
+  font-size: 0.82rem;
+  font-weight: 800;
 }
 
 .review-create-toggle-group--seat {

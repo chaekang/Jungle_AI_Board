@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { getCurrentUser } from "../auth/api"
 import { TOKEN_KEY } from "../auth/constants"
+import SeatAssistantPanel from "../agent/components/SeatAssistantPanel"
 import ReviewComments from "../comments/components/ReviewComments"
 import SeatReviewCard from "./components/SeatReviewCard"
 import { deleteSeatReview } from "./api"
@@ -773,6 +774,8 @@ export default function ReviewBoardPage() {
           </section>
         </div>
       ) : null}
+
+      <SeatAssistantPanel />
     </main>
   )
 }
