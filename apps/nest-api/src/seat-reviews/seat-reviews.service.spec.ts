@@ -19,12 +19,34 @@ describe('SeatReviewsService tags', () => {
       count: jest.fn(),
       update: jest.fn(),
     },
+    seatReviewEmbedding: {
+      deleteMany: jest.fn(),
+    },
     seatReviewTag: {
       deleteMany: jest.fn(),
       createMany: jest.fn(),
     },
+    comment: {
+      deleteMany: jest.fn(),
+    },
     $transaction: jest.fn(),
   });
+
+  const makeRagService = () => ({
+    upsertReviewEmbedding: jest.fn().mockResolvedValue({ indexed: true }),
+    deleteReviewEmbedding: jest.fn().mockResolvedValue(undefined),
+  });
+
+  const makeService = () => {
+    const prisma = makePrisma();
+    const ragService = makeRagService();
+    const service = new SeatReviewsService(
+      prisma as never,
+      ragService as never,
+    );
+
+    return { prisma, ragService, service };
+  };
 
   const reviewWithRelations = {
     id: 11n,
@@ -64,14 +86,14 @@ describe('SeatReviewsService tags', () => {
       {
         tag: {
           id: 2n,
-          name: '시야좋음',
+          name: 'good_view',
           type: 'seat_feature',
         },
       },
       {
         tag: {
           id: 4n,
-          name: '첫관람추천',
+          name: 'first_timer',
           type: 'viewing_purpose',
         },
       },
@@ -98,8 +120,8 @@ describe('SeatReviewsService tags', () => {
     jest.clearAllMocks();
   });
 
-  it('creates a review and connects unique tag ids', async () => {
-    const prisma = makePrisma();
+  it('creates a review, connects unique tag ids, and schedules RAG indexing', async () => {
+    const { prisma, ragService, service } = makeService();
     prisma.performance.findUnique.mockResolvedValue({
       id: 9n,
       theaterId: 3n,
@@ -108,13 +130,11 @@ describe('SeatReviewsService tags', () => {
     prisma.tag.count.mockResolvedValue(2);
     prisma.seatReview.create.mockResolvedValue(reviewWithRelations);
 
-    const service = new SeatReviewsService(prisma as never);
-
     await expect(service.create(user, createDto)).resolves.toMatchObject({
       id: '11',
       tags: [
-        { id: '2', name: '시야좋음', type: 'seat_feature' },
-        { id: '4', name: '첫관람추천', type: 'viewing_purpose' },
+        { id: '2', name: 'good_view', type: 'seat_feature' },
+        { id: '4', name: 'first_timer', type: 'viewing_purpose' },
       ],
     });
 
@@ -153,17 +173,16 @@ describe('SeatReviewsService tags', () => {
         },
       },
     });
+    expect(ragService.upsertReviewEmbedding).toHaveBeenCalledWith(11n);
   });
 
   it('builds search filters, sorting, pagination, and hasNext metadata', async () => {
-    const prisma = makePrisma();
+    const { prisma, service } = makeService();
     prisma.seatReview.findMany.mockResolvedValue([reviewWithRelations]);
     prisma.seatReview.count.mockResolvedValue(11);
     prisma.$transaction.mockImplementation((queries: unknown[]) =>
       Promise.all(queries),
     );
-
-    const service = new SeatReviewsService(prisma as never);
 
     await expect(
       service.findAll({
@@ -302,8 +321,8 @@ describe('SeatReviewsService tags', () => {
     );
   });
 
-  it('replaces review tags when updating with tag ids', async () => {
-    const prisma = makePrisma();
+  it('replaces review tags and schedules RAG reindexing when updating with tag ids', async () => {
+    const { prisma, ragService, service } = makeService();
     prisma.seatReview.findUnique.mockResolvedValue({
       id: 11n,
       authorId: 7n,
@@ -314,12 +333,10 @@ describe('SeatReviewsService tags', () => {
       seatReviewTags: [reviewWithRelations.seatReviewTags[0]],
     });
 
-    const service = new SeatReviewsService(prisma as never);
-
     await expect(
       service.update('11', user, { tagIds: ['2', '2'] }),
     ).resolves.toMatchObject({
-      tags: [{ id: '2', name: '시야좋음', type: 'seat_feature' }],
+      tags: [{ id: '2', name: 'good_view', type: 'seat_feature' }],
     });
 
     expect(prisma.seatReview.update).toHaveBeenCalledWith(
@@ -336,19 +353,18 @@ describe('SeatReviewsService tags', () => {
         },
       }),
     );
+    expect(ragService.upsertReviewEmbedding).toHaveBeenCalledWith(11n);
   });
 
   it('includes tags when reading a review detail', async () => {
-    const prisma = makePrisma();
+    const { prisma, service } = makeService();
     prisma.seatReview.findUnique.mockResolvedValue(reviewWithRelations);
-
-    const service = new SeatReviewsService(prisma as never);
 
     await expect(service.findOne('11')).resolves.toMatchObject({
       id: '11',
       tags: [
-        { id: '2', name: '시야좋음', type: 'seat_feature' },
-        { id: '4', name: '첫관람추천', type: 'viewing_purpose' },
+        { id: '2', name: 'good_view', type: 'seat_feature' },
+        { id: '4', name: 'first_timer', type: 'viewing_purpose' },
       ],
     });
   });

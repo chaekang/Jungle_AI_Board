@@ -7,6 +7,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { AuthenticatedUser } from 'src/common/interfaces/authenticated-user.interface';
 import { PrismaService } from 'src/database/prisma.service';
+import { RagService } from 'src/rag/rag.service';
 import { CreateSeatReviewDto } from './dto/create-seat-review.dto';
 import { SeatReviewQueryDto } from './dto/seat-review-query.dto';
 import { UpdateSeatReviewDto } from './dto/update-seat-review.dto';
@@ -33,7 +34,10 @@ type SeatReviewWithRelations = Prisma.SeatReviewGetPayload<{
 
 @Injectable()
 export class SeatReviewsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ragService: RagService,
+  ) {}
 
   // 좌석 리뷰 생성
   async create(user: AuthenticatedUser, dto: CreateSeatReviewDto) {
@@ -78,6 +82,10 @@ export class SeatReviewsService {
           : {}),
       },
       include: seatReviewInclude,
+    });
+
+    void this.ragService.upsertReviewEmbedding(review.id).catch((error) => {
+      console.error('Failed to index seat review embedding', error);
     });
 
     return this.toPublicReview(review);
@@ -194,6 +202,12 @@ export class SeatReviewsService {
       include: seatReviewInclude,
     });
 
+    void this.ragService
+      .upsertReviewEmbedding(updateReview.id)
+      .catch((error) => {
+        console.error('Failed to reindex seat review embedding', error);
+      });
+
     return this.toPublicReview(updateReview);
   }
 
@@ -211,6 +225,9 @@ export class SeatReviewsService {
     this.assertAuthor(existingReview.authorId, user.id);
 
     await this.prisma.$transaction([
+      this.prisma.seatReviewEmbedding.deleteMany({
+        where: { seatReviewId: reviewId },
+      }),
       this.prisma.seatReviewTag.deleteMany({
         where: { seatReviewId: reviewId },
       }),

@@ -91,6 +91,7 @@ model SeatReview {
 
   comments              Comment[]
   seatReviewTags        SeatReviewTag[]
+  embedding             SeatReviewEmbedding?
 
   @@index([theaterId])
   @@index([musicalId])
@@ -139,4 +140,17 @@ model SeatReviewTag {
   @@unique([seatReviewId, tagId])
   @@index([tagId])
   @@map("seat_review_tags")
+}
+
+model SeatReviewEmbedding {
+  seatReviewId BigInt   @id @map("seat_review_id")
+  document     String
+  embedding    Unsupported("vector(1536)")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  seatReview   SeatReview @relation(fields: [seatReviewId], references: [id], onDelete: Cascade)
+
+  @@index([updatedAt])
+  @@map("seat_review_embeddings")
 }
