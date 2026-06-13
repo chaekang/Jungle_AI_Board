@@ -50,11 +50,35 @@ export default function AuthPage() {
   // 토큰이 바뀌면 실행(유효한 토큰인지 확인)
   useEffect(() => {
     if (!token) {
-      setCurrentUser(null)
       return
     }
 
-    void loadMe(token)
+    let isMounted = true
+    const tokenValue = token
+
+    async function loadCurrentUser() {
+      try {
+        const user = await getCurrentUser(tokenValue)
+
+        if (isMounted) {
+          setCurrentUser(user)
+        }
+      } catch (err) {
+        localStorage.removeItem(TOKEN_KEY)
+
+        if (isMounted) {
+          setToken(null)
+          setCurrentUser(null)
+          setError(err instanceof Error ? err.message : "Failed to load the current user.")
+        }
+      }
+    }
+
+    void loadCurrentUser()
+
+    return () => {
+      isMounted = false
+    }
   }, [token])
 
   // 회원가입 처리
@@ -131,19 +155,6 @@ export default function AuthPage() {
     } catch (err) {
       // error에 메시지 저장
       setError(err instanceof Error ? err.message : "Login failed.")
-    }
-  }
-
-  // 현재 사용자 조회
-  async function loadMe(tokenValue: string) {
-    try {
-      const user = await getCurrentUser(tokenValue)
-      setCurrentUser(user) // 현재 유저 저장
-    } catch (err) {
-      localStorage.removeItem(TOKEN_KEY) // 브라우저에 저장된 토큰 삭제
-      setToken(null) // token을 null로 저장
-      setCurrentUser(null) // 현재 유저 null
-      setError(err instanceof Error ? err.message : "Failed to load the current user.") // 에러 메시지 저장
     }
   }
 
