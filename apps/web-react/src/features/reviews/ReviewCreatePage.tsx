@@ -15,6 +15,9 @@ import type {
   UpdateSeatReviewPayload,
 } from "./types"
 import { TOKEN_KEY } from "../auth/constants"
+import { getTags } from "../tags/api"
+import TagSelector from "../tags/components/TagSelector"
+import type { TagOption } from "../tags/types"
 import { createSeatReview, getSeatReview, updateSeatReview } from "./api"
 import { getSelectedTheaterForSeatLayout } from "./review-create-seat-layout"
 import "./styles/review-create-page.css"
@@ -83,9 +86,11 @@ export default function ReviewCreatePage() {
   const [submitMessage, setSubmitMessage] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingReview, setEditingReview] = useState<PublicSeatReview | null>(null)
+  const [tags, setTags] = useState<TagOption[]>([])
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([])
+  const [isLoadingTags, setIsLoadingTags] = useState(true)
+  const [tagError, setTagError] = useState("")
   const isSubmittingRef = useRef(false)
-  const skipNextTheaterResetRef = useRef(false)
-  const hasAppliedEditPerformanceRef = useRef(false)
 
   const { theaters, workOptions, performances, isLoadingMetadata, isLoadingPerformances, error } =
     useReviewMetadata(selectedTheaterId)
@@ -156,6 +161,37 @@ export default function ReviewCreatePage() {
   )
 
   useEffect(() => {
+    let isMounted = true
+
+    async function loadTags() {
+      try {
+        setTagError("")
+        setIsLoadingTags(true)
+
+        const tagOptions = await getTags()
+
+        if (isMounted) {
+          setTags(tagOptions)
+        }
+      } catch (err) {
+        if (isMounted) {
+          setTagError(err instanceof Error ? err.message : "태그를 불러오지 못했습니다.")
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingTags(false)
+        }
+      }
+    }
+
+    void loadTags()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
     if (!reviewId) {
       return
     }
@@ -173,10 +209,9 @@ export default function ReviewCreatePage() {
           return
         }
 
-        skipNextTheaterResetRef.current = true
-        hasAppliedEditPerformanceRef.current = false
         setEditingReview(review)
         setSelectedTheaterId(review.theater.id)
+        setSelectedPerformanceId(review.performance?.id ?? "")
         setTheaterSearchText(review.theater.name)
         setWorkSearchText(getReviewWorkTitle(review))
         setSeatLocation({
@@ -193,6 +228,7 @@ export default function ReviewCreatePage() {
           stageVisibilityRating: review.ratings.stageVisibility,
         })
         setContent(review.content)
+        setSelectedTagIds((review.tags ?? []).map((tag) => tag.id))
       } catch (err) {
         setFormError(err instanceof Error ? err.message : "후기를 불러오지 못했습니다.")
       }
@@ -205,71 +241,19 @@ export default function ReviewCreatePage() {
     }
   }, [reviewId])
 
-  useEffect(() => {
-    if (skipNextTheaterResetRef.current) {
-      skipNextTheaterResetRef.current = false
-      return
-    }
-
-    setSelectedPerformanceId("")
-    setWorkSearchText("")
-    setSeatLocation(initialSeatLocation)
-    setFormError("")
-  }, [selectedTheaterId])
-
-  useEffect(() => {
-    if (
-      !editingReview ||
-      hasAppliedEditPerformanceRef.current ||
-      isLoadingPerformances ||
-      !editingReview.performance
-    ) {
-      return
-    }
-
-    if (workOptions.some((work) => work.performanceId === editingReview.performance?.id)) {
-      setSelectedPerformanceId(editingReview.performance.id)
-      setWorkSearchText(getReviewWorkTitle(editingReview))
-      hasAppliedEditPerformanceRef.current = true
-    }
-  }, [editingReview, isLoadingPerformances, workOptions])
-
-  useEffect(() => {
-    if (!selectedTheaterId) {
-      return
-    }
-
-    if (isEditMode && editingReview && !hasAppliedEditPerformanceRef.current) {
-      return
-    }
-
-    if (
-      selectedPerformanceId &&
-      !workOptions.some((work) => work.performanceId === selectedPerformanceId)
-    ) {
-      setSelectedPerformanceId("")
-    }
-  }, [selectedPerformanceId, selectedTheaterId, workOptions])
-
-  useEffect(() => {
-    if (isEditMode && editingReview && !hasAppliedEditPerformanceRef.current) {
-      return
-    }
-
-    if (
-      selectedPerformanceId &&
-      !filteredWorkOptions.some((work) => work.performanceId === selectedPerformanceId)
-    ) {
-      setSelectedPerformanceId("")
-    }
-  }, [filteredWorkOptions, selectedPerformanceId])
-
   function handleSeatDropdownBlur(event: FocusEvent<HTMLDivElement>) {
     const nextFocusedElement = event.relatedTarget as Node | null
 
     if (!event.currentTarget.contains(nextFocusedElement)) {
       setOpenSeatDropdown(null)
     }
+  }
+
+  function clearTheaterDependentFields() {
+    setSelectedPerformanceId("")
+    setWorkSearchText("")
+    setSeatLocation(initialSeatLocation)
+    setFormError("")
   }
 
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
@@ -301,6 +285,7 @@ export default function ReviewCreatePage() {
         : {}),
       ...ratings,
       content: content.trim(),
+      tagIds: selectedTagIds,
     }
 
     setFormError("")
@@ -370,6 +355,7 @@ export default function ReviewCreatePage() {
                 onChange={(event) => {
                   setTheaterSearchText(event.target.value)
                   setSelectedTheaterId("")
+                  clearTheaterDependentFields()
                 }}
                 placeholder="공연장을 검색하세요"
               />
@@ -386,6 +372,7 @@ export default function ReviewCreatePage() {
                         onClick={() => {
                           setSelectedTheaterId(theater.id)
                           setTheaterSearchText(theater.name)
+                          clearTheaterDependentFields()
                         }}
                       >
                         {theater.name}
@@ -599,8 +586,24 @@ export default function ReviewCreatePage() {
           <h2 className="review-create-section-title">후기</h2>
           <textarea
             className="review-create-textarea"
+            aria-describedby="review-content-hint"
+            minLength={10}
             value={content}
             onChange={(event) => setContent(event.target.value)}
+          />
+          <p className="review-create-field-hint" id="review-content-hint">
+            후기는 10자 이상 입력해주세요.
+          </p>
+        </section>
+
+        <section className="review-create-panel">
+          <h2 className="review-create-section-title">태그</h2>
+          <TagSelector
+            error={tagError}
+            isLoading={isLoadingTags}
+            onChange={setSelectedTagIds}
+            selectedTagIds={selectedTagIds}
+            tags={tags}
           />
         </section>
 

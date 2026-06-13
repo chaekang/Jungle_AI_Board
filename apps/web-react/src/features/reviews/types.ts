@@ -83,12 +83,20 @@ export type ReviewRatingDraft = {
 export type CreateSeatReviewPayload = ReviewDraftPayload & 
   ReviewRatingDraft & {
     content: string;
+    tagIds?: string[];
   }
 
 export type UpdateSeatReviewPayload = Partial<SeatLocationDraft> &
   Partial<ReviewRatingDraft> & {
     content?: string;
+    tagIds?: string[];
   }
+
+export type ReviewTag = {
+  id: string;
+  name: string;
+  type: string;
+}
 
 // 서버 응답 타입
 export type PublicSeatReview = {
@@ -123,6 +131,7 @@ export type PublicSeatReview = {
     stageVisibility: number;
   }
   content: string;
+  tags?: ReviewTag[];
   createdAt: string;
   updatedAt: string;
 }

@@ -1,7 +1,11 @@
-// @ts-nocheck
-import assert from "node:assert/strict";
 import { getSelectedTheaterForSeatLayout } from "./review-create-seat-layout.ts";
 import type { PublicSeatReview } from "./types.ts";
+
+function assertDeepEqual(actual: unknown, expected: unknown) {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`Expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`);
+  }
+}
 
 const editingReview: PublicSeatReview = {
   id: "review-1",
@@ -28,6 +32,6 @@ const selectedTheater = getSelectedTheaterForSeatLayout({
   editingReview,
 });
 
-assert.deepEqual(selectedTheater, editingReview.theater);
+assertDeepEqual(selectedTheater, editingReview.theater);
 
 console.log("review-create-seat-layout tests passed.");

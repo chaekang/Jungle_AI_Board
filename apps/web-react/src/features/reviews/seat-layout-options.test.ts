@@ -1,8 +1,12 @@
-// @ts-nocheck
-import assert from "node:assert/strict";
 import { mergeSeatOptions } from "./seat-layout-options.ts";
 
-assert.deepEqual(
+function assertDeepEqual(actual: unknown, expected: unknown) {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`Expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`);
+  }
+}
+
+assertDeepEqual(
   mergeSeatOptions(undefined, ["1", "2"], "열"),
   [
     { value: "1", label: "1열" },
@@ -10,7 +14,7 @@ assert.deepEqual(
   ],
 );
 
-assert.deepEqual(
+assertDeepEqual(
   mergeSeatOptions(
     [
       { value: "1", label: "1열" },

@@ -434,6 +434,13 @@
   line-height: 1.6;
 }
 
+.review-create-field-hint {
+  margin: -4px 0 0;
+  color: #77545c;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
 .review-create-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -1,7 +1,17 @@
-// @ts-nocheck
-import assert from "node:assert/strict";
 import { loadAllSeatReviewPages } from "./review-pagination.ts";
 import type { PublicSeatReview, SeatReviewListResponse } from "./types.ts";
+
+function assertEqual<T>(actual: T, expected: T) {
+  if (actual !== expected) {
+    throw new Error(`Expected ${String(expected)}, received ${String(actual)}`);
+  }
+}
+
+function assertDeepEqual(actual: unknown, expected: unknown) {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`Expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`);
+  }
+}
 
 function makeReview(id: number): PublicSeatReview {
   return {
@@ -43,7 +53,7 @@ const reviews = await loadAllSeatReviewPages(async ({ page, limit }) => {
   } satisfies SeatReviewListResponse;
 });
 
-assert.equal(reviews.length, 120);
-assert.deepEqual(requestedPages, [1, 2, 3]);
+assertEqual(reviews.length, 120);
+assertDeepEqual(requestedPages, [1, 2, 3]);
 
 console.log("review-pagination tests passed.");

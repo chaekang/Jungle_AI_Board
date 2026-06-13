@@ -13,6 +13,7 @@ import {
 } from "./theater-seat-map-index"
 import {
   getReviewBoardDisplayReviews,
+  getReviewTags,
   getSeatFilterScopeReviews,
   getSortedUniqueSeatValues,
   type ReviewBoardFilter,
@@ -23,7 +24,7 @@ import "./styles/review-board-page.css"
 
 const TheaterSeatMap = lazy(() => import("./components/TheaterSeatMap"))
 
-type FilterMode = "theater" | "work"
+type FilterMode = "theater" | "work" | "tag"
 type ViewMode = "board" | "seatMap"
 type SortKey =
   | "latest"
@@ -73,6 +74,12 @@ const initialSeatFilter: SeatFilter = {
   numberRange: "",
 }
 
+const filterResultLabels: Record<FilterMode, string> = {
+  theater: "극장 검색 결과",
+  work: "작품 검색 결과",
+  tag: "태그 검색 결과",
+}
+
 function getWorkLabel(review: PublicSeatReview) {
   return [review.performance?.seasonLabel, review.musical.title].filter(Boolean).join(" ")
 }
@@ -109,6 +116,21 @@ function makeUniqueFilters(reviews: PublicSeatReview[], mode: FilterMode, query:
   const options = new Map<string, ReviewBoardFilter>()
 
   reviews.forEach((review) => {
+    if (mode === "tag") {
+      getReviewTags(review).forEach((tag) => {
+        if (normalizedQuery && !tag.name.toLowerCase().includes(normalizedQuery)) {
+          return
+        }
+
+        options.set(`tag:${tag.id}`, {
+          id: tag.id,
+          label: tag.name,
+          mode,
+        })
+      })
+      return
+    }
+
     const id = mode === "theater" ? review.theater.id : review.performance?.id
     const rawLabel = mode === "theater" ? review.theater.name : getWorkLabel(review)
     const label = mode === "theater" ? getCanonicalTheaterName(rawLabel) : rawLabel
@@ -245,6 +267,19 @@ export default function ReviewBoardPage() {
   )
 
   const canShowSeatMap = Boolean(selectedFilter?.mode === "theater" && selectedFilter.hasSeatMap)
+  const effectiveViewMode: ViewMode = viewMode === "seatMap" && canShowSeatMap ? "seatMap" : "board"
+  const effectiveSeatFilter = useMemo<SeatFilter>(
+    () => ({
+      ...seatFilter,
+      floor:
+        seatFilter.floor && !floorOptions.includes(seatFilter.floor) ? "" : seatFilter.floor,
+      section:
+        seatFilter.section && !sectionOptions.includes(seatFilter.section)
+          ? ""
+          : seatFilter.section,
+    }),
+    [floorOptions, seatFilter, sectionOptions],
+  )
   const seatFilterHint = selectedFilter
     ? `${selectedFilter.label} 기준으로 가능한 위치만 표시합니다.`
     : "극장이나 작품을 선택하면 해당 범위의 위치만 표시합니다."
@@ -252,35 +287,34 @@ export default function ReviewBoardPage() {
   const visibleReviews = useMemo(() => {
     return seatFilterScopeReviews
       .filter((review) => {
-        if (seatFilter.floor && review.seat.floor !== seatFilter.floor) {
+        if (effectiveSeatFilter.floor && review.seat.floor !== effectiveSeatFilter.floor) {
           return false
         }
 
-        if (seatFilter.section && review.seat.section !== seatFilter.section) {
+        if (effectiveSeatFilter.section && review.seat.section !== effectiveSeatFilter.section) {
           return false
         }
 
-        if (!matchesRange(review.seat.row, seatFilter.rowRange)) {
+        if (!matchesRange(review.seat.row, effectiveSeatFilter.rowRange)) {
           return false
         }
 
-        return matchesRange(review.seat.number, seatFilter.numberRange)
+        return matchesRange(review.seat.number, effectiveSeatFilter.numberRange)
       })
       .sort((a, b) => {
         const difference = getSortValue(b, sortKey) - getSortValue(a, sortKey)
         return isAscendingSort(sortKey) ? -difference : difference
       })
-  }, [seatFilterScopeReviews, seatFilter, sortKey])
+  }, [seatFilterScopeReviews, effectiveSeatFilter, sortKey])
 
   const displayReviews = getReviewBoardDisplayReviews({
-    viewMode,
+    viewMode: effectiveViewMode,
     visibleReviews,
     seatMapReviews: seatFilterScopeReviews,
   })
 
   useEffect(() => {
     if (!authToken) {
-      setCurrentUser(null)
       return
     }
 
@@ -325,32 +359,6 @@ export default function ReviewBoardPage() {
     window.addEventListener("keydown", handleEscape)
     return () => window.removeEventListener("keydown", handleEscape)
   }, [selectedReview])
-
-  useEffect(() => {
-    if (viewMode === "seatMap" && !canShowSeatMap) {
-      setViewMode("board")
-    }
-  }, [canShowSeatMap, viewMode])
-
-  useEffect(() => {
-    if (viewMode === "seatMap") {
-      setIsSortOpen(false)
-    }
-  }, [viewMode])
-
-  useEffect(() => {
-    setSeatFilter((currentFilter) => ({
-      ...currentFilter,
-      floor:
-        currentFilter.floor && !floorOptions.includes(currentFilter.floor)
-          ? ""
-          : currentFilter.floor,
-      section:
-        currentFilter.section && !sectionOptions.includes(currentFilter.section)
-          ? ""
-          : currentFilter.section,
-    }))
-  }, [floorOptions, sectionOptions])
 
   useEffect(() => {
     if (!isLogoutConfirmOpen) {
@@ -465,6 +473,14 @@ export default function ReviewBoardPage() {
             >
               작품별
             </button>
+            <button
+              className="review-board-chip"
+              type="button"
+              aria-pressed={activeFilterMode === "tag"}
+              onClick={() => handleFilterModeChange("tag")}
+            >
+              태그별
+            </button>
             {activeFilterMode ? (
               <input
                 className="review-board-filter-search"
@@ -477,7 +493,7 @@ export default function ReviewBoardPage() {
 
           {activeFilterMode && filterSearchText.trim() ? (
             <div className="review-board-filter-result-zone">
-              <p>{activeFilterMode === "theater" ? "극장 검색 결과" : "작품 검색 결과"}</p>
+              <p>{filterResultLabels[activeFilterMode]}</p>
               <div className="review-board-filter-results">
                 {filterOptions.length > 0 ? (
                   filterOptions.map((option) => (
@@ -493,6 +509,7 @@ export default function ReviewBoardPage() {
                         setFilterSearchText(option.label)
 
                         if (option.mode === "theater" && option.hasSeatMap) {
+                          setIsSortOpen(false)
                           setViewMode("seatMap")
                         }
                       }}
@@ -512,7 +529,7 @@ export default function ReviewBoardPage() {
           <div className="review-board-view-tabs">
             <button
               type="button"
-              aria-pressed={viewMode === "board"}
+              aria-pressed={effectiveViewMode === "board"}
               onClick={() => setViewMode("board")}
             >
               게시판
@@ -520,15 +537,18 @@ export default function ReviewBoardPage() {
             {canShowSeatMap ? (
               <button
                 type="button"
-                aria-pressed={viewMode === "seatMap"}
-                onClick={() => setViewMode("seatMap")}
+                aria-pressed={effectiveViewMode === "seatMap"}
+                onClick={() => {
+                  setIsSortOpen(false)
+                  setViewMode("seatMap")
+                }}
               >
                 좌석배치도
               </button>
             ) : null}
           </div>
 
-          {viewMode === "board" ? (
+          {effectiveViewMode === "board" ? (
             <div className="review-board-list-toolbar">
               <button
                 className="review-board-sort-button"
@@ -576,11 +596,11 @@ export default function ReviewBoardPage() {
                         <button
                           key={floor}
                           type="button"
-                          aria-pressed={seatFilter.floor === floor}
+                          aria-pressed={effectiveSeatFilter.floor === floor}
                           onClick={() =>
                             setSeatFilter({
-                              ...seatFilter,
-                              floor: seatFilter.floor === floor ? "" : floor,
+                              ...effectiveSeatFilter,
+                              floor: effectiveSeatFilter.floor === floor ? "" : floor,
                             })
                           }
                         >
@@ -597,11 +617,11 @@ export default function ReviewBoardPage() {
                         <button
                           key={section}
                           type="button"
-                          aria-pressed={seatFilter.section === section}
+                          aria-pressed={effectiveSeatFilter.section === section}
                           onClick={() =>
                             setSeatFilter({
-                              ...seatFilter,
-                              section: seatFilter.section === section ? "" : section,
+                              ...effectiveSeatFilter,
+                              section: effectiveSeatFilter.section === section ? "" : section,
                             })
                           }
                         >
@@ -615,9 +635,9 @@ export default function ReviewBoardPage() {
                     <label>
                       열
                       <input
-                        value={seatFilter.rowRange}
+                        value={effectiveSeatFilter.rowRange}
                         onChange={(event) =>
-                          setSeatFilter({ ...seatFilter, rowRange: event.target.value })
+                          setSeatFilter({ ...effectiveSeatFilter, rowRange: event.target.value })
                         }
                         placeholder="3~6"
                       />
@@ -625,9 +645,9 @@ export default function ReviewBoardPage() {
                     <label>
                       번호
                       <input
-                        value={seatFilter.numberRange}
+                        value={effectiveSeatFilter.numberRange}
                         onChange={(event) =>
-                          setSeatFilter({ ...seatFilter, numberRange: event.target.value })
+                          setSeatFilter({ ...effectiveSeatFilter, numberRange: event.target.value })
                         }
                         placeholder="3~6"
                       />
@@ -655,7 +675,7 @@ export default function ReviewBoardPage() {
           ) : null}
 
           {!isLoading && !error ? (
-            viewMode === "seatMap" && canShowSeatMap && selectedFilter?.mode === "theater" ? (
+            effectiveViewMode === "seatMap" && selectedFilter?.mode === "theater" ? (
               <Suspense fallback={<p className="review-board-state">좌석배치도를 불러오는 중입니다.</p>}>
                 <TheaterSeatMap
                   currentUserId={currentUser?.id}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import type { CSSProperties } from "react"
 import SeatReviewCard from "./SeatReviewCard"
 import {
@@ -175,16 +175,17 @@ export default function TheaterSeatMap({
   const [selectedSeatKey, setSelectedSeatKey] = useState<string | null>(null)
   const seatReviewMap = useMemo(() => buildSeatReviewMap(reviews), [reviews])
 
-  useEffect(() => {
-    setSelectedFloor(floorsWithReviews[0]?.floor ?? config?.floors[0]?.floor ?? "")
-    setSelectedSeatKey(null)
-  }, [config, floorsWithReviews])
-
   if (!config) {
     throw new Error(`${theaterName} 좌석배치도 설정이 없습니다.`)
   }
 
-  const floor = config.floors.find((item) => item.floor === selectedFloor) ?? config.floors[0]
+  const effectiveSelectedFloor =
+    config.floors.find((item) => item.floor === selectedFloor)?.floor ??
+    floorsWithReviews[0]?.floor ??
+    config.floors[0]?.floor ??
+    ""
+  const floor =
+    config.floors.find((item) => item.floor === effectiveSelectedFloor) ?? config.floors[0]
   const blockRows = getVisibleBlockRows(floor)
   const selectedReviews = selectedSeatKey ? seatReviewMap.get(selectedSeatKey) ?? [] : []
 
@@ -200,8 +201,11 @@ export default function TheaterSeatMap({
             <button
               key={item.floor}
               type="button"
-              aria-pressed={selectedFloor === item.floor}
-              onClick={() => setSelectedFloor(item.floor)}
+              aria-pressed={effectiveSelectedFloor === item.floor}
+              onClick={() => {
+                setSelectedFloor(item.floor)
+                setSelectedSeatKey(null)
+              }}
             >
               {item.label}
             </button>

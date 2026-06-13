@@ -163,7 +163,7 @@
 
 .review-board-filter-row {
   display: grid;
-  grid-template-columns: 112px 112px minmax(180px, 1fr);
+  grid-template-columns: 112px 112px 112px minmax(180px, 1fr);
   gap: 8px;
   align-items: center;
 }
@@ -513,7 +513,8 @@
   gap: 10px;
 }
 
-.board-rating-tags span {
+.board-rating-tags span,
+.board-review-tags span {
   min-height: 34px;
   display: inline-flex;
   align-items: center;
@@ -524,6 +525,24 @@
   background: #ffffff;
   color: #6f1d2a;
   font-weight: 800;
+}
+
+.board-review-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: -8px;
+}
+
+.board-review-tags span {
+  min-height: 22px;
+  padding: 1px 7px;
+  border-color: #eee3e5;
+  background: rgba(255, 250, 250, 0.48);
+  color: #9a7b82;
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.2;
 }
 
 .board-review-actions {

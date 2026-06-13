@@ -4,13 +4,17 @@ import type { PublicSeatReview } from "./types";
 export type ReviewBoardFilter = {
   id: string;
   label: string;
-  mode: "theater" | "work";
+  mode: "theater" | "work" | "tag";
   hasSeatMap?: boolean;
   aliases?: string[];
 };
 
+export function getReviewTags(review: PublicSeatReview) {
+  return review.tags ?? [];
+}
+
 function getSearchText(review: PublicSeatReview) {
-  return review.content.toLowerCase();
+  return [review.content, ...getReviewTags(review).map((tag) => tag.name)].join(" ").toLowerCase();
 }
 
 export function matchesReviewBoardFilter(
@@ -31,7 +35,11 @@ export function matchesReviewBoardFilter(
     );
   }
 
-  return review.performance?.id === selectedFilter.id;
+  if (selectedFilter.mode === "work") {
+    return review.performance?.id === selectedFilter.id;
+  }
+
+  return getReviewTags(review).some((tag) => tag.id === selectedFilter.id);
 }
 
 export function getSeatFilterScopeReviews(

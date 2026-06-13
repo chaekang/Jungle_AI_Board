@@ -38,34 +38,47 @@ export function useReviewMetadata(selectedTheaterId: string) {
 
   useEffect(() => {
     if (!selectedTheaterId) {
-      setPerformances([])
-      setIsLoadingPerformances(false)
       return
     }
+
+    let isMounted = true
 
     async function loadPerformances() {
       try {
         setError("")
         setIsLoadingPerformances(true)
+        setPerformances([])
 
         const performanceData = await getPerformances({
           theaterId: selectedTheaterId,
         })
 
-        setPerformances(performanceData)
+        if (isMounted) {
+          setPerformances(performanceData)
+        }
       } catch (err) {
-        setPerformances([])
-        setError(err instanceof Error ? err.message : "공연 목록을 불러오지 못했습니다.")
+        if (isMounted) {
+          setPerformances([])
+          setError(err instanceof Error ? err.message : "공연 목록을 불러오지 못했습니다.")
+        }
       } finally {
-        setIsLoadingPerformances(false)
+        if (isMounted) {
+          setIsLoadingPerformances(false)
+        }
       }
     }
 
     void loadPerformances()
+
+    return () => {
+      isMounted = false
+    }
   }, [selectedTheaterId])
 
   const workOptions = useMemo<ReviewWorkOption[]>(() => {
-    return performances.map((performance) => {
+    const currentPerformances = selectedTheaterId ? performances : []
+
+    return currentPerformances.map((performance) => {
       const displayTitle = getDisplayTitle(performance)
 
       return {
@@ -77,14 +90,14 @@ export function useReviewMetadata(selectedTheaterId: string) {
         searchText: `${performance.musicalTitle} ${displayTitle}`.toLowerCase(),
       }
     })
-  }, [performances])
+  }, [performances, selectedTheaterId])
 
   return {
     theaters,
     workOptions,
-    performances,
+    performances: selectedTheaterId ? performances : [],
     isLoadingMetadata,
-    isLoadingPerformances,
+    isLoadingPerformances: selectedTheaterId ? isLoadingPerformances : false,
     error,
   }
 }

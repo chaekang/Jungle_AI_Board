@@ -55,6 +55,7 @@ export default function SeatReviewCard({
   canManage = false,
 }: SeatReviewCardProps) {
   const isInteractive = Boolean(onSelect)
+  const tags = review.tags ?? []
 
   return (
     <article
@@ -91,6 +92,14 @@ export default function SeatReviewCard({
         <span>표정 체감 {getRatingLabel(review.ratings.expression)}</span>
         <span>무대 전체 {getRatingLabel(review.ratings.stageVisibility)}</span>
       </div>
+
+      {tags.length > 0 ? (
+        <div className="board-review-tags" aria-label="태그">
+          {tags.map((tag) => (
+            <span key={tag.id}>{tag.name}</span>
+          ))}
+        </div>
+      ) : null}
 
       {canManage ? (
         <div className="board-review-actions">

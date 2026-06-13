@@ -1,12 +1,23 @@
-// @ts-nocheck
-import assert from "node:assert/strict";
 import {
   getReviewBoardDisplayReviews,
   getSeatFilterScopeReviews,
   getSortedUniqueSeatValues,
   matchesReviewBoardFilter,
 } from "./review-board-filters.ts";
+import type { ReviewBoardFilter } from "./review-board-filters.ts";
 import type { PublicSeatReview } from "./types.ts";
+
+function assertEqual<T>(actual: T, expected: T) {
+  if (actual !== expected) {
+    throw new Error(`Expected ${String(expected)}, received ${String(actual)}`);
+  }
+}
+
+function assertDeepEqual(actual: unknown, expected: unknown) {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`Expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`);
+  }
+}
 
 function makeReview(input: {
   id: string;
@@ -64,26 +75,26 @@ const reviews = [
   }),
 ];
 
-const blueSquareFilter = {
+const blueSquareFilter: ReviewBoardFilter = {
   id: "blue",
   label: "블루스퀘어 신한카드홀",
   mode: "theater",
   aliases: ["블루스퀘어 신한카드홀"],
 };
 
-assert.equal(matchesReviewBoardFilter(reviews[0], blueSquareFilter), true);
-assert.equal(matchesReviewBoardFilter(reviews[2], blueSquareFilter), false);
+assertEqual(matchesReviewBoardFilter(reviews[0], blueSquareFilter), true);
+assertEqual(matchesReviewBoardFilter(reviews[2], blueSquareFilter), false);
 
 const scopedReviews = getSeatFilterScopeReviews(reviews, {
   searchText: "",
   selectedFilter: blueSquareFilter,
 });
 
-assert.deepEqual(
+assertDeepEqual(
   getSortedUniqueSeatValues(scopedReviews, (review) => review.seat.floor),
   ["1층", "2층"],
 );
-assert.deepEqual(
+assertDeepEqual(
   getSortedUniqueSeatValues(scopedReviews, (review) => review.seat.section),
   ["A", "C"],
 );
@@ -93,11 +104,11 @@ const searchedReviews = getSeatFilterScopeReviews(reviews, {
   selectedFilter: null,
 });
 
-assert.equal(searchedReviews.length, 3);
+assertEqual(searchedReviews.length, 3);
 
 const filteredBoardReviews = [scopedReviews[0]];
 
-assert.deepEqual(
+assertDeepEqual(
   getReviewBoardDisplayReviews({
     viewMode: "board",
     visibleReviews: filteredBoardReviews,
@@ -106,7 +117,7 @@ assert.deepEqual(
   filteredBoardReviews,
 );
 
-assert.deepEqual(
+assertDeepEqual(
   getReviewBoardDisplayReviews({
     viewMode: "seatMap",
     visibleReviews: filteredBoardReviews,
