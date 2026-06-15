@@ -120,8 +120,13 @@ export type SeatReviewSearchParams = {
   seatFloor?: string;
   seatSection?: string;
   seatRow?: string;
+  seatRowFrom?: number;
+  seatRowTo?: number;
   seatNumber?: string;
+  seatNumberFrom?: number;
+  seatNumberTo?: number;
   tagId?: string;
+  tagIds?: string;
   tag?: string;
   hasObstruction?: boolean;
   minViewRating?: number;

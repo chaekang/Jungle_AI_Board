@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { FocusEvent, SubmitEvent } from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useReviewMetadata } from "./hooks/useReviewMetadata"
-import { getMcpSeatLayout } from "../mcp/api"
-import type { McpSeatLayout } from "../mcp/types"
 import {
   getTheaterSeatLayout,
   makeFloorSectionKey,
@@ -17,9 +15,12 @@ import type {
   UpdateSeatReviewPayload,
 } from "./types"
 import { getTags } from "../tags/api"
-import TagSelector from "../tags/components/TagSelector"
 import type { TagOption } from "../tags/types"
 import { createSeatReview, getSeatReview, updateSeatReview } from "./api"
+import ReviewCreateActions from "./components/ReviewCreateActions"
+import ReviewContentPanel from "./components/ReviewContentPanel"
+import ReviewRatingPanel, { type ReviewRatingValues } from "./components/ReviewRatingPanel"
+import ReviewTagPanel from "./components/ReviewTagPanel"
 import { getSelectedTheaterForSeatLayout } from "./review-create-seat-layout"
 import "./styles/review-create-page.css"
 
@@ -48,27 +49,21 @@ const initialSeatLocation: SeatLocationDraft = {
 
 type SeatDropdownKey = "row" | "number"
 
-const ratingOptions = [
-  { value: 1, label: "최악" },
-  { value: 2, label: "나쁨" },
-  { value: 3, label: "보통" },
-  { value: 4, label: "좋음" },
-  { value: 5, label: "최고" },
-]
-
-const ratingFields = [
-  { key: "viewRating", label: "시야" },
-  { key: "soundRating", label: "음향" },
-  { key: "comfortRating", label: "좌석" },
-  { key: "expressionRating", label: "표정 체감" },
-  { key: "stageVisibilityRating", label: "무대 전체 체감" },
-] as const
+const initialRatings: ReviewRatingValues = {
+  viewRating: 5,
+  soundRating: 5,
+  comfortRating: 5,
+  expressionRating: 5,
+  stageVisibilityRating: 5,
+}
 
 export default function ReviewCreatePage() {
   const navigate = useNavigate()
   const { reviewId } = useParams()
+  const [searchParams] = useSearchParams()
   const isEditMode = Boolean(reviewId)
-  const [selectedTheaterId, setSelectedTheaterId] = useState("")
+  const initialTheaterId = isEditMode ? "" : (searchParams.get("theaterId") ?? "")
+  const [selectedTheaterId, setSelectedTheaterId] = useState(initialTheaterId)
   const [theaterSearchText, setTheaterSearchText] = useState("")
   const [selectedPerformanceId, setSelectedPerformanceId] = useState("")
   const [workSearchText, setWorkSearchText] = useState("")
@@ -77,13 +72,7 @@ export default function ReviewCreatePage() {
   const [formError, setFormError] = useState("")
 
   const [content, setContent] = useState("")
-  const [ratings, setRatings] = useState({
-    viewRating: 5,
-    soundRating: 5,
-    comfortRating: 5,
-    expressionRating: 5,
-    stageVisibilityRating: 5,
-  })
+  const [ratings, setRatings] = useState<ReviewRatingValues>(initialRatings)
   const [submitMessage, setSubmitMessage] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingReview, setEditingReview] = useState<PublicSeatReview | null>(null)
@@ -91,9 +80,6 @@ export default function ReviewCreatePage() {
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([])
   const [isLoadingTags, setIsLoadingTags] = useState(true)
   const [tagError, setTagError] = useState("")
-  const [mcpLayout, setMcpLayout] = useState<McpSeatLayout | null>(null)
-  const [mcpError, setMcpError] = useState("")
-  const [isLoadingMcpLayout, setIsLoadingMcpLayout] = useState(false)
   const isSubmittingRef = useRef(false)
 
   const { theaters, workOptions, performances, isLoadingMetadata, isLoadingPerformances, error } =
@@ -108,6 +94,12 @@ export default function ReviewCreatePage() {
       }),
     [editingReview, theaters, selectedTheaterId],
   )
+  const selectedTheaterName = useMemo(
+    () => theaters.find((theater) => theater.id === selectedTheaterId)?.name ?? "",
+    [selectedTheaterId, theaters],
+  )
+  const theaterSearchInputValue =
+    theaterSearchText || (selectedTheaterId ? selectedTheaterName : "")
 
   const selectedPerformance = useMemo(
     () => performances.find((performance) => performance.id === selectedPerformanceId) ?? null,
@@ -115,12 +107,6 @@ export default function ReviewCreatePage() {
   )
 
   const seatLayout = useMemo(() => getTheaterSeatLayout(selectedTheater), [selectedTheater])
-  const selectedMcpFloor = seatLocation.seatFloor
-    ? mcpLayout?.sectionsByFloor[seatLocation.seatFloor] ?? []
-    : []
-  const selectedMcpBlocks = seatLocation.seatFloor
-    ? mcpLayout?.aiBlocksByFloor[seatLocation.seatFloor] ?? []
-    : []
   const needsOfficialSection = hasOfficialSections(seatLayout)
   const sections = seatLocation.seatFloor
     ? seatLayout.sectionsByFloor[seatLocation.seatFloor] ?? []
@@ -200,50 +186,6 @@ export default function ReviewCreatePage() {
       isMounted = false
     }
   }, [])
-
-  useEffect(() => {
-    let isMounted = true
-    const theaterName = selectedTheater?.name
-
-    async function loadMcpLayout() {
-      await Promise.resolve()
-
-      if (!isMounted) {
-        return
-      }
-
-      if (!theaterName) {
-        setMcpLayout(null)
-        setMcpError("")
-        return
-      }
-
-      try {
-        setMcpError("")
-        setIsLoadingMcpLayout(true)
-        const layout = await getMcpSeatLayout(theaterName)
-
-        if (isMounted) {
-          setMcpLayout(layout)
-        }
-      } catch (err) {
-        if (isMounted) {
-          setMcpLayout(null)
-          setMcpError(err instanceof Error ? err.message : "좌석 보조 정보를 불러오지 못했습니다.")
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoadingMcpLayout(false)
-        }
-      }
-    }
-
-    void loadMcpLayout()
-
-    return () => {
-      isMounted = false
-    }
-  }, [selectedTheater?.name])
 
   useEffect(() => {
     if (!reviewId) {
@@ -398,7 +340,7 @@ export default function ReviewCreatePage() {
             <div className="review-create-work-control">
               <input
                 className="review-create-input review-create-input--work"
-                value={theaterSearchText}
+                value={theaterSearchInputValue}
                 disabled={isEditMode || isLoadingMetadata}
                 onChange={(event) => {
                   setTheaterSearchText(event.target.value)
@@ -532,94 +474,6 @@ export default function ReviewCreatePage() {
             </div>
           ) : null}
 
-          {selectedTheater ? (
-            <div className="review-create-row review-create-row--mcp">
-              <span className="review-create-label">보조</span>
-              <div className="review-create-mcp-helper">
-                <div className="review-create-mcp-head">
-                  <strong>{mcpLayout?.canonicalTheaterName ?? selectedTheater.name}</strong>
-                  <span>
-                    {isLoadingMcpLayout
-                      ? "조회 중"
-                      : mcpLayout
-                        ? mcpLayout.isFallback
-                          ? "fallback"
-                          : mcpLayout.cached
-                            ? "cache hit"
-                            : "cache miss"
-                        : "기본 입력"}
-                  </span>
-                </div>
-                {mcpError ? <p>{mcpError}</p> : null}
-                {mcpLayout ? (
-                  <>
-                    <div className="review-create-mcp-group">
-                      <span>층</span>
-                      <div>
-                        {mcpLayout.floors.map((floor) => (
-                          <button
-                            key={floor.value}
-                            className="review-create-chip"
-                            type="button"
-                            aria-pressed={seatLocation.seatFloor === floor.value}
-                            onClick={() => {
-                              setSeatLocation({
-                                ...seatLocation,
-                                seatFloor: floor.value,
-                                seatSection: "",
-                                seatRow: "",
-                                seatNumber: "",
-                              })
-                              setOpenSeatDropdown(null)
-                            }}
-                          >
-                            {floor.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="review-create-mcp-group">
-                      <span>공식 구역</span>
-                      <div>
-                        {selectedMcpFloor.length > 0 ? (
-                          selectedMcpFloor.map((section) => (
-                            <button
-                              key={section.value}
-                              className="review-create-chip"
-                              type="button"
-                              aria-pressed={seatLocation.seatSection === section.value}
-                              onClick={() => {
-                                setSeatLocation({
-                                  ...seatLocation,
-                                  seatSection: section.value,
-                                  seatRow: "",
-                                  seatNumber: "",
-                                })
-                                setOpenSeatDropdown(null)
-                              }}
-                            >
-                              {section.label}
-                            </button>
-                          ))
-                        ) : (
-                          <span>없음</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="review-create-mcp-group">
-                      <span>설명용 블록</span>
-                      <div>
-                        {selectedMcpBlocks.map((block) => (
-                          <span key={block.value}>{block.label}</span>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-
           <div className="review-create-row review-create-row--seat">
             <span className="review-create-label">열</span>
             <div className="review-create-dropdown review-create-dropdown--seat" onBlur={handleSeatDropdownBlur}>
@@ -694,65 +548,25 @@ export default function ReviewCreatePage() {
           </div>
         </section>
 
-        <section className="review-create-panel">
-          <h2 className="review-create-section-title">평점</h2>
-          <div className="review-create-ratings">
-            {ratingFields.map((field) => (
-              <div className="review-create-rating-row" key={field.key}>
-                <span className="review-create-rating-label">{field.label}</span>
-                <div className="review-create-rating-options">
-                  {ratingOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      className="review-create-chip"
-                      type="button"
-                      aria-pressed={ratings[field.key] === option.value}
-                      onClick={() => setRatings({ ...ratings, [field.key]: option.value })}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+        <ReviewRatingPanel ratings={ratings} onChange={setRatings} />
 
-        <section className="review-create-panel">
-          <h2 className="review-create-section-title">후기</h2>
-          <textarea
-            className="review-create-textarea"
-            aria-describedby="review-content-hint"
-            minLength={10}
-            value={content}
-            onChange={(event) => setContent(event.target.value)}
-          />
-          <p className="review-create-field-hint" id="review-content-hint">
-            후기는 10자 이상 입력해주세요.
-          </p>
-        </section>
+        <ReviewContentPanel content={content} onChange={setContent} />
 
-        <section className="review-create-panel">
-          <h2 className="review-create-section-title">태그</h2>
-          <TagSelector
-            error={tagError}
-            isLoading={isLoadingTags}
-            onChange={setSelectedTagIds}
-            selectedTagIds={selectedTagIds}
-            tags={tags}
-          />
-        </section>
+        <ReviewTagPanel
+          error={tagError}
+          isLoading={isLoadingTags}
+          onChange={setSelectedTagIds}
+          selectedTagIds={selectedTagIds}
+          tags={tags}
+        />
 
         {submitMessage ? <p className="review-create-feedback">{submitMessage}</p> : null}
 
-        <div className="review-create-actions">
-          <button className="review-create-action" type="button" onClick={() => navigate("/")}>
-            나가기
-          </button>
-          <button className="review-create-action" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "저장 중..." : isEditMode ? "수정하기" : "저장하기"}
-          </button>
-        </div>
+        <ReviewCreateActions
+          isEditMode={isEditMode}
+          isSubmitting={isSubmitting}
+          onCancel={() => navigate("/")}
+        />
       </form>
     </main>
   )

@@ -13,6 +13,7 @@ type TheaterSeatMapProps = {
   currentUserId?: string
   onDeleteReview?: (review: PublicSeatReview) => void
   onEditReview?: (review: PublicSeatReview) => void
+  onReportReview?: (review: PublicSeatReview) => void
   reviews: PublicSeatReview[]
   theaterName: string
 }
@@ -161,6 +162,7 @@ export default function TheaterSeatMap({
   currentUserId,
   onDeleteReview,
   onEditReview,
+  onReportReview,
   reviews,
   theaterName,
 }: TheaterSeatMapProps) {
@@ -338,6 +340,7 @@ export default function TheaterSeatMap({
                   key={review.id}
                   onDelete={onDeleteReview}
                   onEdit={onEditReview}
+                  onReport={onReportReview}
                   review={review}
                 />
               ))}

@@ -46,9 +46,75 @@ assertDeepEqual(buildSeatReviewSearchQuery(state), {
   sort: "stageVisibility",
 });
 
+assertDeepEqual(
+  buildSeatReviewSearchQuery({
+    ...state,
+    selectedFilter: null,
+    selectedTagIds: ["tag-1", "tag-2"],
+  }),
+  {
+    page: 3,
+    limit: 12,
+    q: "블루",
+    tagIds: "tag-1,tag-2",
+    seatFloor: "1층",
+    seatSection: "A",
+    seatRow: "7",
+    seatNumber: "15",
+    sort: "stageVisibility",
+  },
+);
+
+assertEqual(
+  buildSeatReviewSearchPath({
+    ...state,
+    selectedFilter: null,
+    selectedTagIds: ["tag-1", "tag-2"],
+  }),
+  "/seat-reviews/search?page=3&limit=12&q=%EB%B8%94%EB%A3%A8&seatFloor=1%EC%B8%B5&seatSection=A&seatRow=7&seatNumber=15&tagIds=tag-1%2Ctag-2&sort=stageVisibility",
+);
+
 assertEqual(
   buildSeatReviewSearchPath(state),
   "/seat-reviews/search?page=3&limit=12&q=%EB%B8%94%EB%A3%A8&seatFloor=1%EC%B8%B5&seatSection=A&seatRow=7&seatNumber=15&tagId=tag-1&sort=stageVisibility",
+);
+
+assertDeepEqual(
+  buildSeatReviewSearchQuery({
+    ...state,
+    seatFilter: {
+      floor: "1층",
+      section: "A",
+      row: "10~12",
+      number: "1~3",
+    },
+  }),
+  {
+    page: 3,
+    limit: 12,
+    q: "블루",
+    tagId: "tag-1",
+    seatFloor: "1층",
+    seatSection: "A",
+    seatRowFrom: 10,
+    seatRowTo: 12,
+    seatNumberFrom: 1,
+    seatNumberTo: 3,
+    sort: "stageVisibility",
+  },
+);
+
+assertEqual(
+  buildSeatReviewSearchPath({
+    ...state,
+    seatFilter: {
+      floor: "1층",
+      section: "A",
+      row: "10~12",
+      number: "1~3",
+    },
+  }),
+  "/seat-reviews/search?page=3&limit=12&q=%EB%B8%94%EB%A3%A8&seatFloor=1%EC%B8%B5&seatSection=A&seatRowFrom=10&seatRowTo=12&seatNumberFrom=1&seatNumberTo=3&tagId=tag-1&sort=stageVisibility",
 );
 
 assertDeepEqual(
@@ -95,6 +161,7 @@ assertDeepEqual(
   buildSeatReviewSearchQuery({
     ...state,
     fixedTheaterId: "theater-1",
+    fixedPerformanceId: "performance-9",
     searchText: "blue",
     selectedFilter: {
       id: "theater-2",
@@ -109,6 +176,7 @@ assertDeepEqual(
     limit: 12,
     q: "blue",
     theaterId: "theater-1",
+    performanceId: "performance-9",
     seatFloor: "1층",
     seatSection: "A",
     seatRow: "7",
@@ -121,8 +189,9 @@ assertEqual(
   buildSeatReviewSearchPath({
     ...state,
     fixedTheaterId: "theater-1",
+    fixedPerformanceId: "performance-9",
   }),
-  "/seat-reviews/search?page=3&limit=12&q=%EB%B8%94%EB%A3%A8&theaterId=theater-1&seatFloor=1%EC%B8%B5&seatSection=A&seatRow=7&seatNumber=15&tagId=tag-1&sort=stageVisibility",
+  "/seat-reviews/search?page=3&limit=12&q=%EB%B8%94%EB%A3%A8&theaterId=theater-1&performanceId=performance-9&seatFloor=1%EC%B8%B5&seatSection=A&seatRow=7&seatNumber=15&tagId=tag-1&sort=stageVisibility",
 );
 
 console.log("review-search-query tests passed.");

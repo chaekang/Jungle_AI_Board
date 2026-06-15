@@ -1,4 +1,6 @@
 import {
+  canOpenTheaterReviewPage,
+  getReviewBoardTheaterFilters,
   getReviewBoardDisplayReviews,
   getSeatFilterScopeReviews,
   getSortedUniqueSeatValues,
@@ -81,6 +83,34 @@ const blueSquareFilter: ReviewBoardFilter = {
   mode: "theater",
   aliases: ["블루스퀘어 신한카드홀"],
 };
+
+assertEqual(canOpenTheaterReviewPage(blueSquareFilter), true);
+const emptyReviewTheaterFilters = getReviewBoardTheaterFilters({
+  reviews: [],
+  theaters: [{ id: "theater-empty", name: "Empty Theater" }],
+  query: "empty",
+});
+
+assertEqual(emptyReviewTheaterFilters.length, 1);
+assertEqual(emptyReviewTheaterFilters[0].id, "theater-empty");
+assertEqual(canOpenTheaterReviewPage(emptyReviewTheaterFilters[0]), true);
+
+assertEqual(
+  canOpenTheaterReviewPage({
+    id: "seat-map:세종문화회관 대극장",
+    label: "세종문화회관 대극장",
+    mode: "theater",
+  }),
+  false,
+);
+assertEqual(
+  canOpenTheaterReviewPage({
+    id: "p1",
+    label: "지킬 앤 하이드",
+    mode: "work",
+  }),
+  false,
+);
 
 assertEqual(matchesReviewBoardFilter(reviews[0], blueSquareFilter), true);
 assertEqual(matchesReviewBoardFilter(reviews[2], blueSquareFilter), false);

@@ -1,10 +1,10 @@
 .review-comments {
   display: grid;
-  gap: 14px;
+  gap: 16px;
   border: 1px solid #eadde0;
   border-radius: 18px;
-  background: #fffafa;
-  padding: 16px;
+  background: linear-gradient(180deg, #fffdfd 0%, #fffafa 100%);
+  padding: 18px;
 }
 
 .review-comments-header {
@@ -12,6 +12,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eadde0;
 }
 
 .review-comments-header p {
@@ -136,16 +138,17 @@
 
 .review-comment-list {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .review-comment-item {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   border: 1px solid #eadde0;
-  border-radius: 14px;
+  border-radius: 16px;
   background: #ffffff;
-  padding: 12px;
+  padding: 14px;
+  box-shadow: 0 10px 22px rgba(52, 23, 29, 0.06);
 }
 
 .review-comment-meta {
@@ -174,7 +177,8 @@
 
 .review-comment-item[data-reply="true"] {
   border-color: #efe4e7;
-  background: #fffdfd;
+  background: #fffafa;
+  box-shadow: none;
 }
 
 .review-comment-mentions,
@@ -201,4 +205,44 @@
   border: 1px solid #eadde0;
   border-radius: 12px;
   background: #fffafa;
+}
+
+.review-comment-actions {
+  flex-wrap: wrap;
+}
+
+.review-comment-form button:disabled,
+.review-comment-edit button:disabled,
+.review-comment-reply-form button:disabled,
+.review-comment-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+  transform: none;
+}
+
+.review-comment-form button:focus-visible,
+.review-comment-edit button:focus-visible,
+.review-comment-reply-form button:focus-visible,
+.review-comment-actions button:focus-visible {
+  outline: 3px solid rgba(127, 34, 49, 0.12);
+  border-color: #7f2231;
+}
+
+@media (max-width: 640px) {
+  .review-comments {
+    padding: 14px;
+  }
+
+  .review-comment-meta,
+  .review-comment-form > div,
+  .review-comment-edit > div,
+  .review-comment-reply-form > div,
+  .review-comment-actions {
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+
+  .review-comment-meta {
+    display: grid;
+  }
 }

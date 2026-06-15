@@ -284,6 +284,17 @@ export class SeatReviewsService {
   // 사용자가 보낸 `performanceId`, `theaterId`, `musicalId`가 맞는 조합인지 확인
   private buildFindAllWhere(query: SeatReviewQueryDto) {
     const and: Prisma.SeatReviewWhereInput[] = [];
+    const seatRowFilter = this.buildSeatTextFilter(
+      query.seatRow,
+      query.seatRowFrom,
+      query.seatRowTo,
+    );
+    const seatNumberFilter = this.buildSeatTextFilter(
+      query.seatNumber,
+      query.seatNumberFrom,
+      query.seatNumberTo,
+    );
+    const tagIds = this.parseIdList(query.tagIds, 'tagIds');
 
     if (query.q) {
       and.push({
@@ -427,27 +438,24 @@ export class SeatReviewsService {
             },
           }
         : {}),
-      ...(query.seatRow
-        ? {
-            seatRow: {
-              equals: query.seatRow,
-              mode: insensitive,
-            },
-          }
-        : {}),
-      ...(query.seatNumber
-        ? {
-            seatNumber: {
-              equals: query.seatNumber,
-              mode: insensitive,
-            },
-          }
-        : {}),
+      ...(seatRowFilter ? { seatRow: seatRowFilter } : {}),
+      ...(seatNumberFilter ? { seatNumber: seatNumberFilter } : {}),
       ...(query.tagId
         ? {
             seatReviewTags: {
               some: {
                 tagId: this.parseId(query.tagId, 'tagId'),
+              },
+            },
+          }
+        : {}),
+      ...(tagIds.length > 0
+        ? {
+            seatReviewTags: {
+              some: {
+                tagId: {
+                  in: tagIds,
+                },
               },
             },
           }
@@ -475,6 +483,60 @@ export class SeatReviewsService {
     };
 
     return where;
+  }
+
+  private buildSeatTextFilter(
+    value: string | undefined,
+    from: number | undefined,
+    to: number | undefined,
+  ): Prisma.StringFilter | undefined {
+    if (value) {
+      return {
+        equals: value,
+        mode: insensitive,
+      };
+    }
+
+    const rangeValues = this.buildSeatRangeValues(from, to);
+
+    return rangeValues.length > 0
+      ? {
+          in: rangeValues,
+          mode: insensitive,
+        }
+      : undefined;
+  }
+
+  private buildSeatRangeValues(
+    from: number | undefined,
+    to: number | undefined,
+  ) {
+    if (!from || !to) {
+      return [];
+    }
+
+    const start = Math.min(from, to);
+    const end = Math.max(from, to);
+
+    if (end - start > 200) {
+      throw new BadRequestException('Seat range is too large.');
+    }
+
+    return Array.from({ length: end - start + 1 }, (_, index) =>
+      String(start + index),
+    );
+  }
+
+  private parseIdList(value: string | undefined, fieldName: string) {
+    if (!value) {
+      return [];
+    }
+
+    return value
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .map((id) => this.parseId(id, fieldName));
   }
 
   private buildFindAllOrderBy(sort: SeatReviewQueryDto['sort']) {

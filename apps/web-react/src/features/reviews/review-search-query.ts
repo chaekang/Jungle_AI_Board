@@ -29,9 +29,11 @@ export type ReviewBoardSearchState = {
   limit: number;
   searchText: string;
   fixedTheaterId?: string;
+  fixedPerformanceId?: string;
   activeFilterMode?: ReviewBoardSearchFilter["mode"] | null;
   filterSearchText?: string;
   selectedFilter: ReviewBoardSearchFilter | null;
+  selectedTagIds?: string[];
   seatFilter: ReviewBoardSeatFilter;
   sortKey: ReviewBoardSortKey;
 };
@@ -61,8 +63,13 @@ const searchParamOrder: Array<keyof SeatReviewSearchParams> = [
   "seatFloor",
   "seatSection",
   "seatRow",
+  "seatRowFrom",
+  "seatRowTo",
   "seatNumber",
+  "seatNumberFrom",
+  "seatNumberTo",
   "tagId",
+  "tagIds",
   "tag",
   "hasObstruction",
   "minViewRating",
@@ -75,6 +82,28 @@ const searchParamOrder: Array<keyof SeatReviewSearchParams> = [
 
 function normalizeText(value: string) {
   return value.trim();
+}
+
+function parseNumericRange(value: string) {
+  const normalizedValue = normalizeText(value);
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  const rangeMatch = normalizedValue.match(/^(\d+)\s*[~-]\s*(\d+)$/);
+
+  if (!rangeMatch) {
+    return null;
+  }
+
+  const first = Number(rangeMatch[1]);
+  const second = Number(rangeMatch[2]);
+
+  return {
+    from: Math.min(first, second),
+    to: Math.max(first, second),
+  };
 }
 
 export function buildSeatReviewSearchQuery(
@@ -97,11 +126,15 @@ export function buildSeatReviewSearchQuery(
     query.theater = selectedFilter.label;
   }
 
-  if (selectedFilter?.mode === "work") {
+  if (state.fixedPerformanceId) {
+    query.performanceId = state.fixedPerformanceId;
+  } else if (selectedFilter?.mode === "work") {
     query.performanceId = selectedFilter.id;
   }
 
-  if (selectedFilter?.mode === "tag") {
+  if (state.selectedTagIds && state.selectedTagIds.length > 0) {
+    query.tagIds = state.selectedTagIds.join(",");
+  } else if (selectedFilter?.mode === "tag") {
     query.tagId = selectedFilter.id;
   }
 
@@ -133,11 +166,25 @@ export function buildSeatReviewSearchQuery(
   }
 
   if (seatFilter.row) {
-    query.seatRow = normalizeText(seatFilter.row);
+    const rowRange = parseNumericRange(seatFilter.row);
+
+    if (rowRange) {
+      query.seatRowFrom = rowRange.from;
+      query.seatRowTo = rowRange.to;
+    } else {
+      query.seatRow = normalizeText(seatFilter.row);
+    }
   }
 
   if (seatFilter.number) {
-    query.seatNumber = normalizeText(seatFilter.number);
+    const numberRange = parseNumericRange(seatFilter.number);
+
+    if (numberRange) {
+      query.seatNumberFrom = numberRange.from;
+      query.seatNumberTo = numberRange.to;
+    } else {
+      query.seatNumber = normalizeText(seatFilter.number);
+    }
   }
 
   query.sort = sortKeyToApiSort[state.sortKey];

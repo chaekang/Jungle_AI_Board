@@ -324,6 +324,72 @@ describe('SeatReviewsService tags', () => {
     );
   });
 
+  it('builds seat row and number range filters for search', async () => {
+    const { prisma, service } = makeService();
+    prisma.seatReview.findMany.mockResolvedValue([reviewWithRelations]);
+    prisma.seatReview.count.mockResolvedValue(1);
+    prisma.$transaction.mockImplementation((queries: unknown[]) =>
+      Promise.all(queries),
+    );
+
+    await service.findAll({
+      theaterId: '3',
+      seatFloor: '1F',
+      seatSection: 'A',
+      seatRowFrom: 10,
+      seatRowTo: 12,
+      seatNumberFrom: 1,
+      seatNumberTo: 3,
+      page: 1,
+      limit: 10,
+    });
+
+    expect(prisma.seatReview.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          moderationStatus: 'VISIBLE',
+          deletedAt: null,
+          theaterId: 3n,
+          seatFloor: { equals: '1F', mode: 'insensitive' },
+          seatSection: { equals: 'A', mode: 'insensitive' },
+          seatRow: { in: ['10', '11', '12'], mode: 'insensitive' },
+          seatNumber: { in: ['1', '2', '3'], mode: 'insensitive' },
+        },
+      }),
+    );
+  });
+
+  it('builds OR tag filters when multiple tag ids are provided', async () => {
+    const { prisma, service } = makeService();
+    prisma.seatReview.findMany.mockResolvedValue([reviewWithRelations]);
+    prisma.seatReview.count.mockResolvedValue(1);
+    prisma.$transaction.mockImplementation((queries: unknown[]) =>
+      Promise.all(queries),
+    );
+
+    await service.findAll({
+      tagIds: '2,4',
+      page: 1,
+      limit: 10,
+    });
+
+    expect(prisma.seatReview.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          moderationStatus: 'VISIBLE',
+          deletedAt: null,
+          seatReviewTags: {
+            some: {
+              tagId: {
+                in: [2n, 4n],
+              },
+            },
+          },
+        },
+      }),
+    );
+  });
+
   it('replaces review tags and schedules RAG reindexing when updating with tag ids', async () => {
     const { prisma, ragService, service } = makeService();
     prisma.seatReview.findUnique.mockResolvedValue({

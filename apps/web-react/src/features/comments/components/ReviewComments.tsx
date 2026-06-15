@@ -60,7 +60,7 @@ export default function ReviewComments({
   const [error, setError] = useState("")
 
   const commentCountLabel = useMemo(
-    () => (comments.length === 0 ? "No comments" : `${comments.length} threads`),
+    () => (comments.length === 0 ? "댓글 없음" : `댓글 ${comments.length}개`),
     [comments.length],
   )
 
@@ -78,7 +78,7 @@ export default function ReviewComments({
         }
       } catch (err) {
         if (isMounted) {
-          setError(err instanceof Error ? err.message : "Failed to load comments.")
+          setError(err instanceof Error ? err.message : "댓글을 불러오지 못했습니다.")
         }
       } finally {
         if (isMounted) {
@@ -121,13 +121,13 @@ export default function ReviewComments({
     onSuccess: (comment: PublicComment) => void,
   ) {
     if (!isAuthenticated) {
-      setError("Sign in to write a comment.")
+      setError("댓글을 쓰려면 로그인해주세요.")
       return
     }
 
     const content = rawContent.trim()
     if (!content) {
-      setError("Enter a comment.")
+      setError("댓글 내용을 입력해주세요.")
       return
     }
 
@@ -137,7 +137,7 @@ export default function ReviewComments({
       const comment = await createComment(reviewId, content, parentId)
       onSuccess(comment)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create comment.")
+      setError(err instanceof Error ? err.message : "댓글 등록에 실패했습니다.")
     } finally {
       setIsSubmitting(false)
     }
@@ -151,13 +151,13 @@ export default function ReviewComments({
 
   async function handleUpdateComment(commentId: string) {
     if (!isAuthenticated) {
-      setError("Sign in to edit a comment.")
+      setError("댓글을 수정하려면 로그인해주세요.")
       return
     }
 
     const content = editingContent.trim()
     if (!content) {
-      setError("Enter a comment.")
+      setError("댓글 내용을 입력해주세요.")
       return
     }
 
@@ -171,17 +171,17 @@ export default function ReviewComments({
       setEditingCommentId(null)
       setEditingContent("")
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update comment.")
+      setError(err instanceof Error ? err.message : "댓글 수정에 실패했습니다.")
     }
   }
 
   async function handleDeleteComment(commentId: string) {
     if (!isAuthenticated) {
-      setError("Sign in to delete a comment.")
+      setError("댓글을 삭제하려면 로그인해주세요.")
       return
     }
 
-    if (!window.confirm("Delete this comment?")) {
+    if (!window.confirm("이 댓글을 삭제할까요?")) {
       return
     }
 
@@ -201,13 +201,13 @@ export default function ReviewComments({
           })),
       )
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete comment.")
+      setError(err instanceof Error ? err.message : "댓글 삭제에 실패했습니다.")
     }
   }
 
   async function handleToggleLike(comment: PublicComment) {
     if (!isAuthenticated) {
-      setError("Sign in to like a comment.")
+      setError("댓글에 좋아요를 누르려면 로그인해주세요.")
       return
     }
 
@@ -229,17 +229,17 @@ export default function ReviewComments({
         })),
       )
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update like.")
+      setError(err instanceof Error ? err.message : "좋아요 처리에 실패했습니다.")
     }
   }
 
   async function handleReportComment(comment: PublicComment) {
     if (!isAuthenticated) {
-      setError("Sign in to report a comment.")
+      setError("댓글을 신고하려면 로그인해주세요.")
       return
     }
 
-    const reason = window.prompt("Report reason")
+    const reason = window.prompt("신고 사유를 입력해주세요.")
     if (!reason?.trim()) {
       return
     }
@@ -248,7 +248,7 @@ export default function ReviewComments({
       setError("")
       await reportComment(comment.id, reason.trim())
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to report comment.")
+      setError(err instanceof Error ? err.message : "댓글 신고에 실패했습니다.")
     }
   }
 
@@ -272,7 +272,7 @@ export default function ReviewComments({
             />
             <div>
               <button type="button" onClick={() => handleUpdateComment(comment.id)}>
-                Save
+                저장
               </button>
               <button
                 type="button"
@@ -281,7 +281,7 @@ export default function ReviewComments({
                   setEditingContent("")
                 }}
               >
-                Cancel
+                취소
               </button>
             </div>
           </div>
@@ -299,7 +299,7 @@ export default function ReviewComments({
 
         <div className="review-comment-actions">
           <button type="button" onClick={() => handleToggleLike(comment)} disabled={!isAuthenticated}>
-            {comment.likedByMe ? "Liked" : "Like"} {comment.likeCount}
+            {comment.likedByMe ? "좋아요 취소" : "좋아요"} {comment.likeCount}
           </button>
           {!isReply ? (
             <button
@@ -310,19 +310,19 @@ export default function ReviewComments({
               }}
               disabled={!isAuthenticated}
             >
-              Reply {comment.replyCount}
+              답글 {comment.replyCount}
             </button>
           ) : null}
           <button type="button" onClick={() => handleReportComment(comment)} disabled={!isAuthenticated}>
-            Report
+            신고
           </button>
           {canManage && !isEditing ? (
             <>
               <button type="button" onClick={() => startEditing(comment)}>
-                Edit
+                수정
               </button>
               <button type="button" onClick={() => handleDeleteComment(comment.id)}>
-                Delete
+                삭제
               </button>
             </>
           ) : null}
@@ -333,7 +333,7 @@ export default function ReviewComments({
             <textarea
               value={replyContent}
               onChange={(event) => setReplyContent(event.target.value)}
-              placeholder="Write a reply."
+              placeholder="답글을 입력해주세요."
               rows={2}
             />
             <div>
@@ -342,7 +342,7 @@ export default function ReviewComments({
                 onClick={() => handleCreateReply(comment.id)}
                 disabled={!replyContent.trim() || isSubmitting}
               >
-                Post reply
+                답글 등록
               </button>
               <button
                 type="button"
@@ -351,7 +351,7 @@ export default function ReviewComments({
                   setReplyContent("")
                 }}
               >
-                Cancel
+                취소
               </button>
             </div>
           </div>
@@ -371,7 +371,7 @@ export default function ReviewComments({
       <header className="review-comments-header">
         <div>
           <p>{commentCountLabel}</p>
-          <h3 id="review-comments-title">Comments</h3>
+          <h3 id="review-comments-title">댓글 목록</h3>
         </div>
       </header>
 
@@ -381,28 +381,28 @@ export default function ReviewComments({
           onChange={(event) => setDraftContent(event.target.value)}
           placeholder={
             isAuthenticated
-              ? "Ask a question or add context about this seat."
-              : "Sign in to write a comment."
+              ? "좌석에 대해 궁금한 점이나 추가 정보를 남겨주세요."
+              : "댓글을 쓰려면 로그인해주세요."
           }
           disabled={!isAuthenticated || isSubmitting}
           rows={3}
         />
         <div>
-          <span>{draftContent.trim().length} chars</span>
+          <span>{draftContent.trim().length}자</span>
           <button type="button" onClick={handleCreateComment} disabled={!isAuthenticated || isSubmitting}>
-            {isSubmitting ? "Posting..." : "Post comment"}
+            {isSubmitting ? "등록 중" : "댓글 등록"}
           </button>
         </div>
       </div>
 
       {error ? <p className="review-comments-state review-comments-state--error">{error}</p> : null}
-      {isLoading ? <p className="review-comments-state">Loading comments...</p> : null}
+      {isLoading ? <p className="review-comments-state">댓글을 불러오는 중입니다.</p> : null}
 
       {!isLoading ? (
         comments.length > 0 ? (
           <div className="review-comment-list">{comments.map((comment) => renderComment(comment))}</div>
         ) : (
-          <p className="review-comments-state">No comments yet.</p>
+          <p className="review-comments-state">아직 댓글이 없습니다.</p>
         )
       ) : null}
     </section>

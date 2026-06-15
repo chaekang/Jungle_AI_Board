@@ -1,5 +1,9 @@
-import { getCanonicalTheaterName } from "./theater-seat-map-index.ts";
-import type { PublicSeatReview } from "./types";
+import {
+  getCanonicalTheaterName,
+  theaterSeatMapNames,
+  theaterSeatMapOptions,
+} from "./theater-seat-map-index.ts";
+import type { PublicSeatReview, TheaterOption } from "./types";
 
 export type ReviewBoardFilter = {
   id: string;
@@ -11,6 +15,87 @@ export type ReviewBoardFilter = {
 
 export function getReviewTags(review: PublicSeatReview) {
   return review.tags ?? [];
+}
+
+export function canOpenTheaterReviewPage(filter: ReviewBoardFilter | null) {
+  return Boolean(filter?.mode === "theater" && !filter.id.startsWith("seat-map:"));
+}
+
+export function getReviewBoardTheaterFilters(input: {
+  reviews: PublicSeatReview[];
+  theaters: TheaterOption[];
+  query: string;
+}) {
+  const normalizedQuery = input.query.trim().toLowerCase();
+  const options = new Map<string, ReviewBoardFilter>();
+
+  function matchesQuery(...labels: string[]) {
+    return labels.some((label) => label.toLowerCase().includes(normalizedQuery));
+  }
+
+  function setOption(option: ReviewBoardFilter) {
+    const key = `theater:${option.label}`;
+    const existing = options.get(key);
+
+    options.set(key, {
+      ...option,
+      id: existing && !existing.id.startsWith("seat-map:") ? existing.id : option.id,
+      aliases: Array.from(new Set([...(existing?.aliases ?? []), ...(option.aliases ?? [])])),
+      hasSeatMap: existing?.hasSeatMap || option.hasSeatMap,
+    });
+  }
+
+  input.reviews.forEach((review) => {
+    const rawLabel = review.theater.name;
+    const label = getCanonicalTheaterName(rawLabel);
+
+    if (!rawLabel || !label || (normalizedQuery && !matchesQuery(label, rawLabel))) {
+      return;
+    }
+
+    setOption({
+      id: review.theater.id,
+      label,
+      mode: "theater",
+      hasSeatMap: theaterSeatMapNames.has(label),
+      aliases: [rawLabel, label],
+    });
+  });
+
+  input.theaters.forEach((theater) => {
+    const rawLabel = theater.name;
+    const label = getCanonicalTheaterName(rawLabel);
+
+    if (!rawLabel || !label || (normalizedQuery && !matchesQuery(label, rawLabel))) {
+      return;
+    }
+
+    setOption({
+      id: theater.id,
+      label,
+      mode: "theater",
+      hasSeatMap: theaterSeatMapNames.has(label),
+      aliases: [rawLabel, label],
+    });
+  });
+
+  theaterSeatMapOptions.forEach((theater) => {
+    const label = getCanonicalTheaterName(theater.label);
+
+    if (normalizedQuery && !matchesQuery(label, theater.label)) {
+      return;
+    }
+
+    setOption({
+      id: theater.id,
+      label,
+      mode: "theater",
+      aliases: [theater.label, label],
+      hasSeatMap: true,
+    });
+  });
+
+  return Array.from(options.values());
 }
 
 function getSearchText(review: PublicSeatReview) {

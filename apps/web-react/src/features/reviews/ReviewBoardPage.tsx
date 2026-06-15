@@ -1,17 +1,16 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { getCurrentUser, logout } from "../auth/api"
 import SeatAssistantPanel from "../agent/components/SeatAssistantPanel"
-import ReviewComments from "../comments/components/ReviewComments"
-import SeatReviewCard from "./components/SeatReviewCard"
-import { deleteSeatReview, reportSeatReview } from "./api"
+import { getTags } from "../tags/api"
+import ReportReviewDialog from "./components/ReportReviewDialog"
+import ReviewDetailModal from "./components/ReviewDetailModal"
+import ReviewResultsPanel from "./components/ReviewResultsPanel"
+import { deleteSeatReview, getTheaters, reportSeatReview } from "./api"
 import { useSeatReviews } from "./hooks/useSeatReviews"
 import {
-  getCanonicalTheaterName,
-  theaterSeatMapNames,
-  theaterSeatMapOptions,
-} from "./theater-seat-map-index"
-import {
+  canOpenTheaterReviewPage,
+  getReviewBoardTheaterFilters,
   getReviewBoardDisplayReviews,
   getReviewTags,
   getSortedUniqueSeatValues,
@@ -22,10 +21,9 @@ import {
   type ReviewBoardSortKey,
 } from "./review-search-query"
 import type { PublicUser } from "../auth/types"
-import type { PublicSeatReview, SeatReviewSearchParams } from "./types"
+import type { TagOption } from "../tags/types"
+import type { PublicSeatReview, SeatReviewSearchParams, TheaterOption } from "./types"
 import "./styles/review-board-page.css"
-
-const TheaterSeatMap = lazy(() => import("./components/TheaterSeatMap"))
 
 type FilterMode = "theater" | "work" | "tag"
 type ViewMode = "board" | "seatMap"
@@ -76,7 +74,16 @@ function getWorkLabel(review: PublicSeatReview) {
   return [review.performance?.seasonLabel, review.musical.title].filter(Boolean).join(" ")
 }
 
-function makeUniqueFilters(reviews: PublicSeatReview[], mode: FilterMode, query: string) {
+function makeUniqueFilters(
+  reviews: PublicSeatReview[],
+  theaters: TheaterOption[],
+  mode: FilterMode,
+  query: string,
+) {
+  if (mode === "theater") {
+    return getReviewBoardTheaterFilters({ reviews, theaters, query })
+  }
+
   const normalizedQuery = query.trim().toLowerCase()
   const options = new Map<string, ReviewBoardFilter>()
 
@@ -96,10 +103,9 @@ function makeUniqueFilters(reviews: PublicSeatReview[], mode: FilterMode, query:
       return
     }
 
-    const id = mode === "theater" ? review.theater.id : review.performance?.id
-    const rawLabel = mode === "theater" ? review.theater.name : getWorkLabel(review)
-    const label = mode === "theater" ? getCanonicalTheaterName(rawLabel) : rawLabel
-    const hasSeatMap = mode === "theater" ? theaterSeatMapNames.has(label) : false
+    const id = review.performance?.id
+    const rawLabel = getWorkLabel(review)
+    const label = rawLabel
 
     if (!id || !rawLabel || !label) {
       return
@@ -120,41 +126,9 @@ function makeUniqueFilters(reviews: PublicSeatReview[], mode: FilterMode, query:
       id: existing?.id ?? id,
       label,
       mode,
-      hasSeatMap: existing?.hasSeatMap || hasSeatMap,
       aliases: Array.from(new Set([...(existing?.aliases ?? []), rawLabel, label])),
     })
   })
-
-  if (mode === "theater") {
-    theaterSeatMapOptions.forEach((theater) => {
-      const label = getCanonicalTheaterName(theater.label)
-
-      if (normalizedQuery && !label.toLowerCase().includes(normalizedQuery)) {
-        return
-      }
-
-      if (options.has(`${mode}:${label}`)) {
-        const existing = options.get(`${mode}:${label}`)
-
-        if (existing) {
-          options.set(`${mode}:${label}`, {
-            ...existing,
-            aliases: Array.from(new Set([...(existing.aliases ?? []), theater.label, label])),
-            hasSeatMap: true,
-          })
-        }
-        return
-      }
-
-      options.set(`${mode}:${label}`, {
-        id: theater.id,
-        label,
-        mode,
-        aliases: [theater.label, label],
-        hasSeatMap: true,
-      })
-    })
-  }
 
   return Array.from(options.values())
 }
@@ -167,12 +141,22 @@ export default function ReviewBoardPage() {
   const [filterMode, setFilterMode] = useState<FilterMode>("theater")
   const [filterSearchText, setFilterSearchText] = useState("")
   const [selectedFilter, setSelectedFilter] = useState<ReviewBoardFilter | null>(null)
+  const [theaters, setTheaters] = useState<TheaterOption[]>([])
+  const [tags, setTags] = useState<TagOption[]>([])
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([])
+  const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false)
+  const [isLoadingTags, setIsLoadingTags] = useState(false)
+  const [tagError, setTagError] = useState("")
   const [isSortOpen, setIsSortOpen] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>("latest")
   const [seatFilter, setSeatFilter] = useState<SeatFilter>(initialSeatFilter)
   const [reviewPage, setReviewPage] = useState(1)
   const [viewMode, setViewMode] = useState<ViewMode>("board")
   const [selectedReview, setSelectedReview] = useState<PublicSeatReview | null>(null)
+  const [reportingReview, setReportingReview] = useState<PublicSeatReview | null>(null)
+  const [isReportingReview, setIsReportingReview] = useState(false)
+  const [reportError, setReportError] = useState("")
+  const [reportMessage, setReportMessage] = useState("")
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false)
   const [actionError, setActionError] = useState("")
   const reviewSearchParams = useMemo<SeatReviewSearchParams>(
@@ -184,6 +168,7 @@ export default function ReviewBoardPage() {
         activeFilterMode,
         filterSearchText,
         selectedFilter,
+        selectedTagIds: activeFilterMode === "tag" ? selectedTagIds : [],
         seatFilter,
         sortKey,
       }),
@@ -194,6 +179,7 @@ export default function ReviewBoardPage() {
       searchText,
       seatFilter,
       selectedFilter,
+      selectedTagIds,
       sortKey,
     ],
   )
@@ -224,8 +210,8 @@ export default function ReviewBoardPage() {
   const isAuthenticated = Boolean(currentUser)
 
   const filterOptions = useMemo(
-    () => makeUniqueFilters(reviews, filterMode, filterSearchText),
-    [filterMode, filterSearchText, reviews],
+    () => makeUniqueFilters(reviews, theaters, filterMode, filterSearchText),
+    [filterMode, filterSearchText, reviews, theaters],
   )
 
   const floorOptions = useMemo(
@@ -298,6 +284,45 @@ export default function ReviewBoardPage() {
   }, [])
 
   useEffect(() => {
+    let isMounted = true
+
+    async function loadTheaterOptions() {
+      try {
+        const theaterOptions = await getTheaters()
+
+        if (isMounted) {
+          setTheaters(theaterOptions)
+        }
+      } catch {
+        if (isMounted) {
+          setTheaters([])
+        }
+      }
+    }
+
+    void loadTheaterOptions()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  const loadTagOptions = useCallback(async () => {
+    try {
+      setTagError("")
+      setIsLoadingTags(true)
+
+      const tagOptions = await getTags()
+
+      setTags(tagOptions)
+    } catch {
+      setTagError("태그 목록을 불러오지 못했습니다. API 서버 연결을 확인한 뒤 다시 시도해주세요.")
+    } finally {
+      setIsLoadingTags(false)
+    }
+  }, [])
+
+  useEffect(() => {
     if (!selectedReview) {
       return
     }
@@ -326,6 +351,18 @@ export default function ReviewBoardPage() {
     window.addEventListener("keydown", handleEscape)
     return () => window.removeEventListener("keydown", handleEscape)
   }, [isLogoutConfirmOpen])
+
+  useEffect(() => {
+    if (!reportMessage) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setReportMessage("")
+    }, 3000)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [reportMessage])
 
   function handleWriteReview() {
     if (isAuthenticated) {
@@ -370,22 +407,33 @@ export default function ReviewBoardPage() {
     }
   }
 
-  async function handleReportReview(review: PublicSeatReview) {
+  function handleReportReview(review: PublicSeatReview) {
     if (!isAuthenticated) {
       navigate("/auth", { state: { redirectTo: "/" } })
       return
     }
 
-    const reason = window.prompt("Report reason")
-    if (!reason?.trim()) {
+    setReportError("")
+    setReportMessage("")
+    setReportingReview(review)
+  }
+
+  async function submitReportReview(reason: string) {
+    if (!reportingReview) {
       return
     }
 
     try {
-      setActionError("")
-      await reportSeatReview(review.id, reason.trim())
+      setReportError("")
+      setReportMessage("")
+      setIsReportingReview(true)
+      await reportSeatReview(reportingReview.id, reason)
+      setReportingReview(null)
+      setReportMessage("신고가 접수되었습니다. 관리자가 확인할게요.")
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Failed to report review.")
+      setReportError(err instanceof Error ? err.message : "후기 신고에 실패했습니다.")
+    } finally {
+      setIsReportingReview(false)
     }
   }
 
@@ -395,11 +443,49 @@ export default function ReviewBoardPage() {
     setFilterMode(nextMode)
     setFilterSearchText("")
     setSelectedFilter(null)
+    setIsTagDropdownOpen(nextMode === "tag")
+
+    if (nextMode === "tag" && tags.length === 0 && !isLoadingTags) {
+      void loadTagOptions()
+    }
+
+    if (nextMode !== "tag") {
+      setSelectedTagIds([])
+    }
   }
 
   function updateSeatFilter(nextSeatFilter: SeatFilter) {
     setReviewPage(1)
     setSeatFilter(nextSeatFilter)
+  }
+
+  function toggleTagFilter(tagId: string) {
+    setReviewPage(1)
+    setSelectedFilter(null)
+    setSelectedTagIds((currentTagIds) =>
+      currentTagIds.includes(tagId)
+        ? currentTagIds.filter((currentTagId) => currentTagId !== tagId)
+        : [...currentTagIds, tagId],
+    )
+  }
+
+  function selectFilter(option: ReviewBoardFilter) {
+    setReviewPage(1)
+    setSelectedFilter(option)
+    setFilterSearchText(option.label)
+
+    if (option.mode === "theater" && option.hasSeatMap) {
+      setIsSortOpen(false)
+      setViewMode("seatMap")
+    }
+  }
+
+  function openTheaterReviewPage(option: ReviewBoardFilter) {
+    if (!canOpenTheaterReviewPage(option)) {
+      return
+    }
+
+    navigate(`/theaters/${option.id}`)
   }
 
   return (
@@ -461,7 +547,7 @@ export default function ReviewBoardPage() {
             >
               태그별
             </button>
-            {activeFilterMode ? (
+            {activeFilterMode && activeFilterMode !== "tag" ? (
               <input
                 className="review-board-filter-search"
                 value={filterSearchText}
@@ -473,9 +559,88 @@ export default function ReviewBoardPage() {
                 placeholder="검색어를 입력하세요"
               />
             ) : null}
+            {activeFilterMode === "tag" ? (
+              <button
+                className="review-board-tag-trigger"
+                type="button"
+                aria-expanded={isTagDropdownOpen}
+                onClick={() => {
+                  const nextIsOpen = !isTagDropdownOpen
+
+                  setIsTagDropdownOpen(nextIsOpen)
+
+                  if (nextIsOpen && tags.length === 0 && !isLoadingTags) {
+                    void loadTagOptions()
+                  }
+                }}
+              >
+                {selectedTagIds.length > 0
+                  ? `태그 ${selectedTagIds.length}개 선택`
+                  : "태그 선택"}
+              </button>
+            ) : null}
           </div>
 
-          {activeFilterMode && filterSearchText.trim() ? (
+          {activeFilterMode === "tag" ? (
+            <div className="review-board-filter-result-zone">
+              <p>태그 선택</p>
+              {tagError ? (
+                <div className="review-board-filter-error-block">
+                  <p>{tagError}</p>
+                  <button type="button" onClick={() => void loadTagOptions()}>
+                    다시 불러오기
+                  </button>
+                </div>
+              ) : null}
+              {isLoadingTags ? (
+                <p className="review-board-empty-filter">태그를 불러오는 중입니다.</p>
+              ) : null}
+              {isTagDropdownOpen && !isLoadingTags && !tagError ? (
+                <div
+                  className="review-board-tag-menu"
+                  role="listbox"
+                  aria-label="태그 다중 선택"
+                  aria-multiselectable="true"
+                >
+                  {tags.map((tag) => (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      aria-pressed={selectedTagIds.includes(tag.id)}
+                      onClick={() => toggleTagFilter(tag.id)}
+                    >
+                      {tag.name}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {selectedTagIds.length > 0 ? (
+                <div className="review-board-selected-tags" aria-label="선택된 태그">
+                  {tags
+                    .filter((tag) => selectedTagIds.includes(tag.id))
+                    .map((tag) => (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        onClick={() => toggleTagFilter(tag.id)}
+                      >
+                        {tag.name} ×
+                      </button>
+                    ))}
+                  <button
+                    className="review-board-selected-tags-clear"
+                    type="button"
+                    onClick={() => {
+                      setReviewPage(1)
+                      setSelectedTagIds([])
+                    }}
+                  >
+                    전체 해제
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : activeFilterMode && filterSearchText.trim() ? (
             <div className="review-board-filter-result-zone">
               <p>{filterResultLabels[activeFilterMode]}</p>
               <div className="review-board-filter-results">
@@ -488,16 +653,7 @@ export default function ReviewBoardPage() {
                       aria-pressed={
                         selectedFilter?.mode === option.mode && selectedFilter.id === option.id
                       }
-                      onClick={() => {
-                        setReviewPage(1)
-                        setSelectedFilter(option)
-                        setFilterSearchText(option.label)
-
-                        if (option.mode === "theater" && option.hasSeatMap) {
-                          setIsSortOpen(false)
-                          setViewMode("seatMap")
-                        }
-                      }}
+                      onClick={() => selectFilter(option)}
                     >
                       {option.label}
                     </button>
@@ -506,6 +662,15 @@ export default function ReviewBoardPage() {
                   <p className="review-board-empty-filter">검색 결과가 없습니다.</p>
                 )}
               </div>
+            </div>
+          ) : null}
+
+          {selectedFilter && canOpenTheaterReviewPage(selectedFilter) ? (
+            <div className="review-board-selected-filter-action">
+              <span>{selectedFilter.label}</span>
+              <button type="button" onClick={() => openTheaterReviewPage(selectedFilter)}>
+                극장별 후기 보기
+              </button>
             </div>
           ) : null}
         </section>
@@ -656,108 +821,60 @@ export default function ReviewBoardPage() {
             </div>
           ) : null}
 
-          {viewIsLoading ? <p className="review-board-state">후기 목록을 불러오는 중입니다.</p> : null}
-          {viewError ? <p className="review-board-state review-board-state--error">{viewError}</p> : null}
-          {actionError ? (
-            <p className="review-board-state review-board-state--error">{actionError}</p>
-          ) : null}
-
-          {!viewError && effectiveViewMode === "board" ? (
-            <div className="review-board-result-summary">
-              <span>
-                총 {total.toLocaleString()}개 · {page}/{totalPages}페이지
-              </span>
-              <div className="review-board-pagination">
-                <button
-                  type="button"
-                  disabled={viewIsLoading || page <= 1}
-                  onClick={() => setReviewPage((currentPage) => Math.max(1, currentPage - 1))}
-                >
-                  이전
-                </button>
-                <button
-                  type="button"
-                  disabled={viewIsLoading || !hasNext}
-                  onClick={() => setReviewPage((currentPage) => currentPage + 1)}
-                >
-                  다음
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          {!viewIsLoading && !viewError ? (
-            effectiveViewMode === "seatMap" && selectedFilter?.mode === "theater" ? (
-              <Suspense fallback={<p className="review-board-state">좌석배치도를 불러오는 중입니다.</p>}>
-                <TheaterSeatMap
-                  currentUserId={currentUser?.id}
-                  onDeleteReview={handleDeleteReview}
-                  onEditReview={handleEditReview}
-                  reviews={displayReviews}
-                  theaterName={selectedFilter.label}
-                />
-              </Suspense>
-            ) : (
-              <div className="review-board-list">
-                {displayReviews.length > 0 ? (
-                  displayReviews.map((review) => (
-                    <SeatReviewCard
-                      canManage={review.author.id === currentUser?.id}
-                      key={review.id}
-                      onDelete={handleDeleteReview}
-                      onEdit={handleEditReview}
-                      onReport={handleReportReview}
-                      onTheaterSelect={(review) => navigate(`/theaters/${review.theater.id}`)}
-                      review={review}
-                      onSelect={setSelectedReview}
-                    />
-                  ))
-                ) : (
-                  <p className="review-board-state">보여줄 후기가 없습니다.</p>
-                )}
-              </div>
-            )
-          ) : null}
+          <ReviewResultsPanel
+            actionError={actionError}
+            currentUserId={currentUser?.id}
+            error={viewError}
+            hasNext={hasNext}
+            isLoading={viewIsLoading}
+            onDeleteReview={handleDeleteReview}
+            onEditReview={handleEditReview}
+            onNextPage={() => setReviewPage((currentPage) => currentPage + 1)}
+            onPreviousPage={() => setReviewPage((currentPage) => Math.max(1, currentPage - 1))}
+            onReportReview={handleReportReview}
+            onSelectReview={setSelectedReview}
+            onTheaterSelect={(review) => navigate(`/theaters/${review.theater.id}`)}
+            page={page}
+            reviews={displayReviews}
+            theaterName={selectedFilter?.label ?? ""}
+            total={total}
+            totalPages={totalPages}
+            viewMode={effectiveViewMode}
+          />
         </section>
       </div>
 
       {selectedReview ? (
-        <div
-          className="review-detail-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="review-detail-title"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              setSelectedReview(null)
+        <ReviewDetailModal
+          currentUserId={currentUser?.id}
+          isAuthenticated={isAuthenticated}
+          onClose={() => setSelectedReview(null)}
+          onDeleteReview={handleDeleteReview}
+          onEditReview={handleEditReview}
+          onReportReview={handleReportReview}
+          review={selectedReview}
+        />
+      ) : null}
+
+      {reportingReview ? (
+        <ReportReviewDialog
+          error={reportError}
+          isSubmitting={isReportingReview}
+          onCancel={() => {
+            if (!isReportingReview) {
+              setReportingReview(null)
+              setReportError("")
             }
           }}
-        >
-          <section className="review-detail-card">
-            <header>
-              <div>
-                <p>선택한 후기</p>
-                <h2 id="review-detail-title">후기 상세</h2>
-              </div>
-              <button type="button" onClick={() => setSelectedReview(null)}>
-                닫기
-              </button>
-            </header>
-            <SeatReviewCard
-              canManage={selectedReview.author.id === currentUser?.id}
-              onDelete={handleDeleteReview}
-              onEdit={handleEditReview}
-              onReport={handleReportReview}
-              review={selectedReview}
-              variant="detail"
-            />
-            <ReviewComments
-              currentUserId={currentUser?.id}
-              isAuthenticated={isAuthenticated}
-              reviewId={selectedReview.id}
-            />
-          </section>
-        </div>
+          onSubmit={submitReportReview}
+          review={reportingReview}
+        />
+      ) : null}
+
+      {reportMessage ? (
+        <p className="review-board-toast" role="status">
+          {reportMessage}
+        </p>
       ) : null}
 
       {isLogoutConfirmOpen ? (

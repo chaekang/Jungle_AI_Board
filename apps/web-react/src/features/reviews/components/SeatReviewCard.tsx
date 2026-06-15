@@ -12,11 +12,11 @@ type SeatReviewCardProps = {
 }
 
 const ratingText: Record<number, string> = {
-  1: "Worst",
-  2: "Weak",
-  3: "Average",
-  4: "Good",
-  5: "Best",
+  1: "최악",
+  2: "나쁨",
+  3: "보통",
+  4: "좋음",
+  5: "최고",
 }
 
 function getRatingLabel(value: number) {
@@ -30,9 +30,9 @@ function getPerformanceTitle(review: PublicSeatReview) {
 function getSeatLabel(review: PublicSeatReview) {
   return [
     review.seat.floor,
-    review.seat.section ? `${review.seat.section} section` : "",
-    review.seat.row ? `${review.seat.row} row` : "",
-    review.seat.number ? `${review.seat.number} seat` : "",
+    review.seat.section ? `${review.seat.section} 구역` : "",
+    review.seat.row ? `${review.seat.row}열` : "",
+    review.seat.number ? `${review.seat.number}번` : "",
   ]
     .filter(Boolean)
     .join(" ")
@@ -102,57 +102,54 @@ export default function SeatReviewCard({
         </p>
       </div>
 
-      <div className="board-rating-tags" aria-label="Ratings">
-        <span>View {getRatingLabel(review.ratings.view)}</span>
-        <span>Sound {getRatingLabel(review.ratings.sound)}</span>
-        <span>Comfort {getRatingLabel(review.ratings.comfort)}</span>
-        <span>Expression {getRatingLabel(review.ratings.expression)}</span>
-        <span>Stage {getRatingLabel(review.ratings.stageVisibility)}</span>
+      <div className="board-rating-tags" aria-label="평가">
+        <span>시야 {getRatingLabel(review.ratings.view)}</span>
+        <span>음향 {getRatingLabel(review.ratings.sound)}</span>
+        <span>좌석 {getRatingLabel(review.ratings.comfort)}</span>
+        <span>표정 {getRatingLabel(review.ratings.expression)}</span>
+        <span>무대 {getRatingLabel(review.ratings.stageVisibility)}</span>
       </div>
 
-      {tags.length > 0 ? (
-        <div className="board-review-tags" aria-label="Tags">
+      {tags.length > 0 || onReport ? (
+        <div className="board-review-tags" aria-label="태그와 신고">
           {tags.map((tag) => (
             <span key={tag.id}>{tag.name}</span>
           ))}
-        </div>
-      ) : null}
-
-      {canManage || onReport ? (
-        <div className="board-review-actions">
           {onReport ? (
             <button
+              className="board-review-report-button"
               type="button"
               onClick={(event) => {
                 event.stopPropagation()
                 onReport(review)
               }}
             >
-              Report
+              신고
             </button>
           ) : null}
-          {canManage ? (
-            <>
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onEdit?.(review)
-                }}
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onDelete?.(review)
-                }}
-              >
-                Delete
-              </button>
-            </>
-          ) : null}
+        </div>
+      ) : null}
+
+      {canManage ? (
+        <div className="board-review-actions">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              onEdit?.(review)
+            }}
+          >
+            수정
+          </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              onDelete?.(review)
+            }}
+          >
+            삭제
+          </button>
         </div>
       ) : null}
     </article>

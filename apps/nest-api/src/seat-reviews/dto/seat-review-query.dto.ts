@@ -74,12 +74,40 @@ export class SeatReviewQueryDto {
   seatRow?: string;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  seatRowFrom?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  seatRowTo?: number;
+
+  @IsOptional()
   @IsString()
   seatNumber?: string;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  seatNumberFrom?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  seatNumberTo?: number;
+
+  @IsOptional()
   @IsString()
   tagId?: string;
+
+  @IsOptional()
+  @IsString()
+  tagIds?: string;
 
   @IsOptional()
   @IsString()

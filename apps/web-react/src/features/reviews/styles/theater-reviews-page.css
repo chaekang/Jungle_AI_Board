@@ -51,22 +51,22 @@
   padding: 20px;
 }
 
-.theater-reviews-search-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
-  gap: 12px;
-}
-
 .theater-reviews-tag-search,
 .theater-reviews-control-grid input,
 .theater-reviews-control-grid select {
   width: 100%;
   min-height: 44px;
-  border: 1px solid #d6dae2;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #171a20;
+  border: 1px solid #decdd1;
+  border-radius: 14px;
+  background: #fffafa;
+  color: #34171d;
   font: inherit;
+  font-weight: 700;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .theater-reviews-tag-search,
@@ -74,14 +74,101 @@
   padding: 0 14px;
 }
 
+.theater-reviews-tag-trigger {
+  width: min(260px, 100%);
+  text-align: left;
+  cursor: pointer;
+}
+
 .theater-reviews-control-grid select {
-  padding: 0 10px;
+  appearance: none;
+  padding: 0 42px 0 14px;
+  background:
+    linear-gradient(45deg, transparent 50%, #6f1d2a 50%) calc(100% - 19px) 50% / 7px 7px
+      no-repeat,
+    linear-gradient(135deg, #6f1d2a 50%, transparent 50%) calc(100% - 14px) 50% / 7px 7px
+      no-repeat,
+    #fffafa;
+  cursor: pointer;
+}
+
+.theater-reviews-tag-search:hover,
+.theater-reviews-control-grid input:hover,
+.theater-reviews-control-grid select:hover,
+.theater-reviews-rating-grid select:hover {
+  border-color: #caaab2;
+  background-color: #ffffff;
+}
+
+.theater-reviews-tag-search:focus,
+.theater-reviews-control-grid input:focus,
+.theater-reviews-control-grid select:focus,
+.theater-reviews-rating-grid select:focus {
+  outline: 3px solid rgba(111, 29, 42, 0.14);
+  border-color: #6f1d2a;
+  background-color: #ffffff;
+  box-shadow: 0 10px 22px rgba(52, 23, 29, 0.08);
+  transform: translateY(-1px);
+}
+
+.theater-reviews-control-grid select:disabled,
+.theater-reviews-rating-grid select:disabled {
+  border-color: #e4d8db;
+  background:
+    linear-gradient(45deg, transparent 50%, #a8979c 50%) calc(100% - 19px) 50% / 7px 7px
+      no-repeat,
+    linear-gradient(135deg, #a8979c 50%, transparent 50%) calc(100% - 14px) 50% / 7px 7px
+      no-repeat,
+    #f7f1f2;
+  color: #a8979c;
+  cursor: not-allowed;
 }
 
 .theater-reviews-control-grid {
   display: grid;
-  grid-template-columns: minmax(160px, 1.5fr) repeat(4, minmax(100px, 1fr));
+  grid-template-columns: minmax(140px, 1fr) minmax(220px, 1.6fr) repeat(4, minmax(90px, 0.8fr));
   gap: 12px;
+}
+
+.theater-reviews-filter-error {
+  margin: -4px 0 0;
+  color: #8a3140;
+  font-weight: 800;
+}
+
+.theater-reviews-tag-panel {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #eadde0;
+  border-radius: 16px;
+  background: #fffafa;
+}
+
+.theater-reviews-tag-panel > p {
+  margin: 0;
+  color: #7b3141;
+  font-size: 0.86rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.theater-reviews-filter-errors {
+  display: grid;
+  gap: 4px;
+  margin: -4px 0 0;
+  border: 1px solid #f0c5cd;
+  border-radius: 14px;
+  background: #fff7f8;
+  padding: 10px 12px;
+}
+
+.theater-reviews-filter-errors p {
+  margin: 0;
+  color: #8a3140;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.45;
 }
 
 .theater-reviews-rating-grid {
@@ -95,34 +182,57 @@
 .theater-reviews-rating-grid label {
   display: grid;
   gap: 6px;
-  color: #5f646d;
+  color: #7b3141;
   font-size: 0.82rem;
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: 0.02em;
 }
 
 .theater-reviews-rating-grid select {
   width: 100%;
   min-height: 40px;
-  border: 1px solid #d6dae2;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #171a20;
+  appearance: none;
+  border: 1px solid #decdd1;
+  border-radius: 14px;
+  background:
+    linear-gradient(45deg, transparent 50%, #6f1d2a 50%) calc(100% - 18px) 50% / 7px 7px
+      no-repeat,
+    linear-gradient(135deg, #6f1d2a 50%, transparent 50%) calc(100% - 13px) 50% / 7px 7px
+      no-repeat,
+    #fffafa;
+  color: #34171d;
   font: inherit;
-  padding: 0 10px;
+  font-weight: 700;
+  padding: 0 42px 0 14px;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .theater-reviews-rating-grid button {
   min-height: 40px;
-  border: 1px solid #cbd1db;
-  border-radius: 6px;
-  background: #f7f8fa;
-  color: #2a3038;
+  border: 1px solid #d8b8bf;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #6f1d2a;
+  padding: 0 16px;
+  font: inherit;
   font-weight: 800;
   cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
 }
 
 .theater-reviews-rating-grid button:hover {
-  background: #eef1f5;
+  transform: translateY(-1px);
+  border-color: #6f1d2a;
+  background: #fff7f8;
 }
 
 .theater-reviews-view-tabs {
@@ -157,7 +267,6 @@
 
 @media (max-width: 760px) {
   .theater-reviews-header,
-  .theater-reviews-search-row,
   .theater-reviews-control-grid,
   .theater-reviews-rating-grid {
     grid-template-columns: 1fr;
