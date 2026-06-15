@@ -16,6 +16,7 @@ describe('SeatReviewsService tags', () => {
       create: jest.fn(),
       findMany: jest.fn(),
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       count: jest.fn(),
       update: jest.fn(),
     },
@@ -213,6 +214,8 @@ describe('SeatReviewsService tags', () => {
     expect(prisma.seatReview.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
+          moderationStatus: 'VISIBLE',
+          deletedAt: null,
           theater: {
             name: {
               contains: 'Dream',
@@ -358,7 +361,7 @@ describe('SeatReviewsService tags', () => {
 
   it('includes tags when reading a review detail', async () => {
     const { prisma, service } = makeService();
-    prisma.seatReview.findUnique.mockResolvedValue(reviewWithRelations);
+    prisma.seatReview.findFirst.mockResolvedValue(reviewWithRelations);
 
     await expect(service.findOne('11')).resolves.toMatchObject({
       id: '11',

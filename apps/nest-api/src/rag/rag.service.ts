@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/database/prisma.service';
 import { OpenAiRagClient } from './openai-rag.client';
 import {
+  buildSeatReviewRagMetadata,
   buildSeatReviewRagDocument,
   ragSeatReviewInclude,
 } from './rag-document.builder';
@@ -53,6 +54,7 @@ export class RagService {
   ) {}
 
   async ask(question: string, limit = 5): Promise<RagAnswer> {
+    const startedAt = Date.now();
     const normalizedQuestion = question.trim();
 
     if (normalizedQuestion.length < 2) {
@@ -67,24 +69,28 @@ export class RagService {
     );
 
     if (sources.length === 0) {
-      return {
+      const result = {
         answer:
           '아직 이 질문에 답할 만큼 맞는 좌석 후기를 찾지 못했습니다. 극장명, 층, 구역이나 열을 조금 더 넓혀서 물어보면 더 잘 찾아볼 수 있어요.',
         reasons: ['검색 조건과 의도가 모두 맞는 후기를 찾지 못했습니다.'],
         filters,
         sources: [],
       };
+      await this.logQuery(normalizedQuestion, result, startedAt);
+      return result;
     }
 
     const rangeAnswer = await this.buildTagRangeAnswer(filters);
 
     if (rangeAnswer) {
-      return {
+      const result = {
         answer: rangeAnswer,
         reasons: this.buildReasons(filters, sources),
         filters,
         sources,
       };
+      await this.logQuery(normalizedQuestion, result, startedAt);
+      return result;
     }
 
     const answer = await this.openAi.createAnswer({
@@ -93,12 +99,14 @@ export class RagService {
       sources,
     });
 
-    return {
+    const result = {
       answer,
       reasons: this.buildReasons(filters, sources),
       filters,
       sources,
     };
+    await this.logQuery(normalizedQuestion, result, startedAt);
+    return result;
   }
 
   async upsertReviewEmbedding(reviewId: bigint) {
@@ -110,17 +118,27 @@ export class RagService {
     if (!review) {
       throw new BadRequestException('Seat review not found');
     }
+    if (review.moderationStatus !== 'VISIBLE' || review.deletedAt) {
+      await this.deleteReviewEmbedding(reviewId);
+      return {
+        seatReviewId: reviewId.toString(),
+        indexed: false,
+      };
+    }
 
     const document = buildSeatReviewRagDocument(review);
+    const metadata = JSON.stringify(buildSeatReviewRagMetadata(review));
     const embedding = await this.openAi.createEmbedding(document);
     const vector = this.toVectorLiteral(embedding);
 
     await this.prisma.$executeRaw`
-      INSERT INTO "seat_review_embeddings" ("seat_review_id", "document", "embedding", "updated_at")
-      VALUES (${reviewId}, ${document}, ${vector}::vector, NOW())
+      INSERT INTO "seat_review_embeddings" ("seat_review_id", "document", "metadata", "document_version", "embedding", "updated_at")
+      VALUES (${reviewId}, ${document}, ${metadata}::jsonb, ${'seat-review-v2'}, ${vector}::vector, NOW())
       ON CONFLICT ("seat_review_id")
       DO UPDATE SET
         "document" = EXCLUDED."document",
+        "metadata" = EXCLUDED."metadata",
+        "document_version" = EXCLUDED."document_version",
         "embedding" = EXCLUDED."embedding",
         "updated_at" = NOW()
     `;
@@ -140,6 +158,7 @@ export class RagService {
 
   async reindexAll() {
     const reviews = await this.prisma.seatReview.findMany({
+      where: { moderationStatus: 'VISIBLE', deletedAt: null },
       select: { id: true },
       orderBy: { id: 'asc' },
     });
@@ -468,7 +487,10 @@ export class RagService {
   }
 
   private buildBaseSqlConditions(filters: RagQuestionFilters) {
-    const conditions: Prisma.Sql[] = [];
+    const conditions: Prisma.Sql[] = [
+      Prisma.sql`sr."moderation_status" = 'VISIBLE'`,
+      Prisma.sql`sr."deleted_at" IS NULL`,
+    ];
 
     if (filters.theaterId) {
       conditions.push(
@@ -615,6 +637,24 @@ export class RagService {
     reasons.push(`관련 후기 ${sources.length}개를 근거로 답변했습니다.`);
 
     return reasons;
+  }
+
+  private async logQuery(
+    question: string,
+    answer: RagAnswer,
+    startedAt: number,
+  ) {
+    await this.prisma.ragQueryLog
+      .create({
+        data: {
+          question,
+          filters: answer.filters as Prisma.InputJsonValue,
+          sourceIds: answer.sources.map((source) => source.id),
+          answerPreview: answer.answer.slice(0, 500),
+          latencyMs: Date.now() - startedAt,
+        },
+      })
+      .catch(() => undefined);
   }
 
   private toVectorLiteral(embedding: number[]) {

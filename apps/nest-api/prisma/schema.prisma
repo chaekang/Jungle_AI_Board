@@ -16,13 +16,51 @@ model User {
   email       String       @unique
   passwordHash String      @map("password_hash")
   nickname    String
+  role        String       @default("USER")
   createdAt   DateTime     @default(now()) @map("created_at")
   updatedAt   DateTime     @updatedAt @map("updated_at")
 
   seatReviews SeatReview[]
   comments    Comment[]
+  authSessions AuthSession[]
+  passwordResetTokens PasswordResetToken[]
+  commentLikes CommentLike[]
 
   @@map("users")
+}
+
+model AuthSession {
+  id               String    @id @default(uuid())
+  userId           BigInt    @map("user_id")
+  refreshTokenHash String    @map("refresh_token_hash")
+  ipAddress        String?   @map("ip_address")
+  userAgent        String?   @map("user_agent")
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  lastUsedAt       DateTime? @map("last_used_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    BigInt    @map("user_id")
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
 }
 
 model Theater {
@@ -81,6 +119,11 @@ model SeatReview {
   expressionRating      Int         @map("expression_rating")
   stageVisibilityRating Int         @map("stage_visibility_rating")
   content               String
+  moderationStatus      String      @default("VISIBLE") @map("moderation_status")
+  hiddenAt              DateTime?   @map("hidden_at")
+  hiddenById            BigInt?     @map("hidden_by_id")
+  hiddenReason          String?     @map("hidden_reason")
+  deletedAt             DateTime?   @map("deleted_at")
   createdAt             DateTime    @default(now()) @map("created_at")
   updatedAt             DateTime    @updatedAt @map("updated_at")
 
@@ -102,18 +145,88 @@ model SeatReview {
   @@map("seat_reviews")
 }
 
+model ReviewReport {
+  id           BigInt    @id @default(autoincrement())
+  seatReviewId BigInt    @map("seat_review_id")
+  reporterId   BigInt    @map("reporter_id")
+  reason       String
+  detail       String?
+  status       String    @default("OPEN")
+  resolvedAt   DateTime? @map("resolved_at")
+  resolvedById BigInt?   @map("resolved_by_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([seatReviewId])
+  @@index([status])
+  @@map("review_reports")
+}
+
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  actorId    BigInt   @map("actor_id")
+  action     String
+  targetType String   @map("target_type")
+  targetId   String   @map("target_id")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([actorId])
+  @@index([targetType, targetId])
+  @@map("audit_logs")
+}
+
 model Comment {
   id           BigInt     @id @default(autoincrement())
   seatReviewId BigInt     @map("seat_review_id")
   authorId     BigInt     @map("author_id")
+  parentId     BigInt?    @map("parent_id")
   content      String
+  moderationStatus String  @default("VISIBLE") @map("moderation_status")
+  hiddenAt    DateTime?   @map("hidden_at")
+  hiddenById  BigInt?     @map("hidden_by_id")
+  hiddenReason String?    @map("hidden_reason")
+  deletedAt   DateTime?   @map("deleted_at")
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
 
   seatReview   SeatReview @relation(fields: [seatReviewId], references: [id])
   author       User       @relation(fields: [authorId], references: [id])
+  parent       Comment?   @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies      Comment[]  @relation("CommentReplies")
+  likes        CommentLike[]
 
+  @@index([seatReviewId, parentId])
   @@map("comments")
+}
+
+model CommentReport {
+  id           BigInt    @id @default(autoincrement())
+  commentId    BigInt    @map("comment_id")
+  reporterId   BigInt    @map("reporter_id")
+  reason       String
+  detail       String?
+  status       String    @default("OPEN")
+  resolvedAt   DateTime? @map("resolved_at")
+  resolvedById BigInt?   @map("resolved_by_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([commentId])
+  @@index([status])
+  @@map("comment_reports")
+}
+
+model CommentLike {
+  id        BigInt   @id @default(autoincrement())
+  commentId BigInt   @map("comment_id")
+  userId    BigInt   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  comment   Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId])
+  @@index([userId])
+  @@map("comment_likes")
 }
 
 model Tag {
@@ -145,6 +258,8 @@ model SeatReviewTag {
 model SeatReviewEmbedding {
   seatReviewId BigInt   @id @map("seat_review_id")
   document     String
+  metadata     Json?
+  documentVersion String @default("seat-review-v2") @map("document_version")
   embedding    Unsupported("vector(1536)")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -153,4 +268,17 @@ model SeatReviewEmbedding {
 
   @@index([updatedAt])
   @@map("seat_review_embeddings")
+}
+
+model RagQueryLog {
+  id           BigInt   @id @default(autoincrement())
+  question     String
+  filters      Json?
+  sourceIds    String[] @default([]) @map("source_ids")
+  answerPreview String? @map("answer_preview")
+  latencyMs    Int     @map("latency_ms")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("rag_query_logs")
 }

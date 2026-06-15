@@ -54,4 +54,16 @@ export class CommentsController {
   remove(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.commentsService.remove(id, user);
   }
+
+  @Post('comments/:id/like')
+  @UseGuards(JwtAuthGuard)
+  like(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.commentsService.like(id, user);
+  }
+
+  @Delete('comments/:id/like')
+  @UseGuards(JwtAuthGuard)
+  unlike(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.commentsService.unlike(id, user);
+  }
 }

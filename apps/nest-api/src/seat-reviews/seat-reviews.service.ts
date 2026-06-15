@@ -120,8 +120,12 @@ export class SeatReviewsService {
 
   // 상세 조회
   async findOne(id: string) {
-    const review = await this.prisma.seatReview.findUnique({
-      where: { id: this.parseId(id, 'id') },
+    const review = await this.prisma.seatReview.findFirst({
+      where: {
+        id: this.parseId(id, 'id'),
+        moderationStatus: 'VISIBLE',
+        deletedAt: null,
+      },
       include: seatReviewInclude,
     });
 
@@ -366,6 +370,8 @@ export class SeatReviewsService {
     }
 
     const where: Prisma.SeatReviewWhereInput = {
+      moderationStatus: 'VISIBLE',
+      deletedAt: null,
       ...(query.theaterId
         ? { theaterId: this.parseId(query.theaterId, 'theaterId') }
         : {}),

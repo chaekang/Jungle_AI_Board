@@ -36,3 +36,30 @@ export function buildSeatReviewRagDocument(review: RagSeatReview) {
     `후기 본문: ${review.content}`,
   ].join('\n');
 }
+
+export function buildSeatReviewRagMetadata(review: RagSeatReview) {
+  return {
+    documentVersion: 'seat-review-v2',
+    reviewId: review.id.toString(),
+    theaterId: review.theater.id.toString(),
+    theaterName: review.theater.name,
+    musicalId: review.musical.id.toString(),
+    musicalTitle: review.musical.title,
+    performanceId: review.performance?.id.toString() ?? null,
+    seasonLabel: review.performance?.seasonLabel ?? null,
+    seat: {
+      floor: review.seatFloor,
+      section: review.seatSection,
+      row: review.seatRow,
+      number: review.seatNumber,
+    },
+    ratings: {
+      view: review.viewRating,
+      sound: review.soundRating,
+      comfort: review.comfortRating,
+      expression: review.expressionRating,
+      stageVisibility: review.stageVisibilityRating,
+    },
+    tags: review.seatReviewTags.map(({ tag }) => tag.name),
+  };
+}
