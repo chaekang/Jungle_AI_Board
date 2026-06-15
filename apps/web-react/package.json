@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "node --experimental-strip-types src/shared/api.test.ts && node --experimental-strip-types src/e2e/auth-report-admin-flow.test.ts && node --experimental-strip-types src/features/comments/comment-api-paths.test.ts && node --experimental-strip-types src/features/reviews/review-search-query.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {

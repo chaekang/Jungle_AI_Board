@@ -5,7 +5,6 @@ export type PublicUser = {
 }
 
 export type LoginResponse = {
-  accessToken: string
   user: PublicUser
 }
 

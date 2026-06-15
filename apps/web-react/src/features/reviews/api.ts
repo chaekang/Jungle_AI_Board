@@ -1,26 +1,31 @@
 import { apiRequest } from "../../shared/api"
 import { buildSeatReviewSearchPath } from "./review-search-query"
-import type { PublicSeatReview, SeatReviewListResponse, CreateSeatReviewPayload, UpdateSeatReviewPayload, MusicalOption, PerformanceOption, TheaterOption, SeatReviewSearchParams } from "./types"
+import type {
+  CreateSeatReviewPayload,
+  MusicalOption,
+  PerformanceOption,
+  PublicSeatReview,
+  SeatReviewListResponse,
+  SeatReviewSearchParams,
+  TheaterOption,
+  UpdateSeatReviewPayload,
+} from "./types"
 
-// 극장 목록 가져오기
 export function getTheaters() {
   return apiRequest<TheaterOption[]>("/theaters")
 }
 
-// 뮤지컬 목록 가져오기
 export function getMusicals() {
   return apiRequest<MusicalOption[]>("/musicals")
 }
 
-// 공연 타입
 type GetPerformancesParams = {
   theaterId?: string
   musicalId?: string
 }
 
-// 공연 목록 가져오기
 export function getPerformances(params: GetPerformancesParams = {}) {
-  const searchParams = new URLSearchParams()    // 비어있는 `URLSearchParams` 객체 생성
+  const searchParams = new URLSearchParams()
 
   if (params.theaterId) {
     searchParams.set("theaterId", params.theaterId)
@@ -30,51 +35,43 @@ export function getPerformances(params: GetPerformancesParams = {}) {
     searchParams.set("musicalId", params.musicalId)
   }
 
-  const queryString = searchParams.toString()   // `searchParams` 안에 있는 값을 문자열로 변환
+  const queryString = searchParams.toString()
   const path = queryString ? `/performances?${queryString}` : "/performances"
 
   return apiRequest<PerformanceOption[]>(path)
 }
 
-// 좌석 리뷰 생성
-export function createSeatReview(input: CreateSeatReviewPayload, token: string) {
-  return apiRequest<PublicSeatReview>(
-    "/seat-reviews",
-    {
-      method: "POST",
-      body: JSON.stringify(input)
-    },
-    token
-  )
+export function createSeatReview(input: CreateSeatReviewPayload) {
+  return apiRequest<PublicSeatReview>("/seat-reviews", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
 }
 
-// 좌석 리뷰 목록 가져오기
 export function getSeatReviews(params: SeatReviewSearchParams = {}) {
   return apiRequest<SeatReviewListResponse>(buildSeatReviewSearchPath(params))
 }
 
-// 리뷰 하나의 상세 정보 가져오기
 export function getSeatReview(id: string) {
   return apiRequest<PublicSeatReview>(`/seat-reviews/${id}`)
 }
 
-export function updateSeatReview(id: string, input: UpdateSeatReviewPayload, token: string) {
-  return apiRequest<PublicSeatReview>(
-    `/seat-reviews/${id}`,
-    {
-      method: "PATCH",
-      body: JSON.stringify(input),
-    },
-    token,
-  )
+export function updateSeatReview(id: string, input: UpdateSeatReviewPayload) {
+  return apiRequest<PublicSeatReview>(`/seat-reviews/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  })
 }
 
-export function deleteSeatReview(id: string, token: string) {
-  return apiRequest<{ delete: boolean }>(
-    `/seat-reviews/${id}`,
-    {
-      method: "DELETE",
-    },
-    token,
-  )
+export function deleteSeatReview(id: string) {
+  return apiRequest<{ delete: boolean }>(`/seat-reviews/${id}`, {
+    method: "DELETE",
+  })
+}
+
+export function reportSeatReview(id: string, reason: string, detail?: string) {
+  return apiRequest<{ id: string }>(`/seat-reviews/${id}/reports`, {
+    method: "POST",
+    body: JSON.stringify({ reason, detail }),
+  })
 }

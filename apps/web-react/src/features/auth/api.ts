@@ -26,8 +26,12 @@ export function login(input: LoginInput) {
   })
 }
 
-export function getCurrentUser(token: string) {
-  return apiRequest<PublicUser>("/auth/me", { method: "GET" }, token)
+export function logout() {
+  return apiRequest<{ ok: boolean }>("/auth/logout", { method: "POST" })
+}
+
+export function getCurrentUser() {
+  return apiRequest<PublicUser>("/auth/me", { method: "GET" })
 }
 
 export function checkEmail(email: string) {

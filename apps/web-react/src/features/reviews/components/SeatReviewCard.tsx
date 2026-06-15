@@ -3,18 +3,20 @@ import type { PublicSeatReview } from "../types"
 type SeatReviewCardProps = {
   review: PublicSeatReview
   onSelect?: (review: PublicSeatReview) => void
+  onTheaterSelect?: (review: PublicSeatReview) => void
   onEdit?: (review: PublicSeatReview) => void
   onDelete?: (review: PublicSeatReview) => void
+  onReport?: (review: PublicSeatReview) => void
   variant?: "default" | "detail"
   canManage?: boolean
 }
 
 const ratingText: Record<number, string> = {
-  1: "최악",
-  2: "나쁨",
-  3: "보통",
-  4: "좋음",
-  5: "최고",
+  1: "Worst",
+  2: "Weak",
+  3: "Average",
+  4: "Good",
+  5: "Best",
 }
 
 function getRatingLabel(value: number) {
@@ -28,9 +30,9 @@ function getPerformanceTitle(review: PublicSeatReview) {
 function getSeatLabel(review: PublicSeatReview) {
   return [
     review.seat.floor,
-    review.seat.section ? `${review.seat.section}구역` : "",
-    review.seat.row ? `${review.seat.row}열` : "",
-    review.seat.number ? `${review.seat.number}번` : "",
+    review.seat.section ? `${review.seat.section} section` : "",
+    review.seat.row ? `${review.seat.row} row` : "",
+    review.seat.number ? `${review.seat.number} seat` : "",
   ]
     .filter(Boolean)
     .join(" ")
@@ -49,8 +51,10 @@ function formatCreatedAt(value: string) {
 export default function SeatReviewCard({
   review,
   onSelect,
+  onTheaterSelect,
   onEdit,
   onDelete,
+  onReport,
   variant = "default",
   canManage = false,
 }: SeatReviewCardProps) {
@@ -78,49 +82,77 @@ export default function SeatReviewCard({
 
       <div className="board-review-meta">
         <h2>{getPerformanceTitle(review)}</h2>
-        <p>{review.theater.name}</p>
+        {onTheaterSelect ? (
+          <button
+            className="board-review-theater-link"
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              onTheaterSelect(review)
+            }}
+          >
+            {review.theater.name}
+          </button>
+        ) : (
+          <p>{review.theater.name}</p>
+        )}
         <p>{getSeatLabel(review)}</p>
         <p className="board-review-byline">
-          {review.author.nickname} · {formatCreatedAt(review.createdAt)}
+          {review.author.nickname} - {formatCreatedAt(review.createdAt)}
         </p>
       </div>
 
-      <div className="board-rating-tags" aria-label="평점">
-        <span>시야 {getRatingLabel(review.ratings.view)}</span>
-        <span>음향 {getRatingLabel(review.ratings.sound)}</span>
-        <span>좌석 {getRatingLabel(review.ratings.comfort)}</span>
-        <span>표정 체감 {getRatingLabel(review.ratings.expression)}</span>
-        <span>무대 전체 {getRatingLabel(review.ratings.stageVisibility)}</span>
+      <div className="board-rating-tags" aria-label="Ratings">
+        <span>View {getRatingLabel(review.ratings.view)}</span>
+        <span>Sound {getRatingLabel(review.ratings.sound)}</span>
+        <span>Comfort {getRatingLabel(review.ratings.comfort)}</span>
+        <span>Expression {getRatingLabel(review.ratings.expression)}</span>
+        <span>Stage {getRatingLabel(review.ratings.stageVisibility)}</span>
       </div>
 
       {tags.length > 0 ? (
-        <div className="board-review-tags" aria-label="태그">
+        <div className="board-review-tags" aria-label="Tags">
           {tags.map((tag) => (
             <span key={tag.id}>{tag.name}</span>
           ))}
         </div>
       ) : null}
 
-      {canManage ? (
+      {canManage || onReport ? (
         <div className="board-review-actions">
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation()
-              onEdit?.(review)
-            }}
-          >
-            수정
-          </button>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation()
-              onDelete?.(review)
-            }}
-          >
-            삭제
-          </button>
+          {onReport ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                onReport(review)
+              }}
+            >
+              Report
+            </button>
+          ) : null}
+          {canManage ? (
+            <>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onEdit?.(review)
+                }}
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onDelete?.(review)
+                }}
+              >
+                Delete
+              </button>
+            </>
+          ) : null}
         </div>
       ) : null}
     </article>

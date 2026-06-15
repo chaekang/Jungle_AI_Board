@@ -16,7 +16,6 @@ import type {
   TheaterSeatLayout,
   UpdateSeatReviewPayload,
 } from "./types"
-import { TOKEN_KEY } from "../auth/constants"
 import { getTags } from "../tags/api"
 import TagSelector from "../tags/components/TagSelector"
 import type { TagOption } from "../tags/types"
@@ -203,16 +202,22 @@ export default function ReviewCreatePage() {
   }, [])
 
   useEffect(() => {
-    if (!selectedTheater?.name) {
-      setMcpLayout(null)
-      setMcpError("")
-      return
-    }
-
     let isMounted = true
-    const theaterName = selectedTheater.name
+    const theaterName = selectedTheater?.name
 
     async function loadMcpLayout() {
+      await Promise.resolve()
+
+      if (!isMounted) {
+        return
+      }
+
+      if (!theaterName) {
+        setMcpLayout(null)
+        setMcpError("")
+        return
+      }
+
       try {
         setMcpError("")
         setIsLoadingMcpLayout(true)
@@ -238,7 +243,7 @@ export default function ReviewCreatePage() {
     return () => {
       isMounted = false
     }
-  }, [selectedTheater])
+  }, [selectedTheater?.name])
 
   useEffect(() => {
     if (!reviewId) {
@@ -343,15 +348,9 @@ export default function ReviewCreatePage() {
     setIsSubmitting(true)
 
     try {
-      const token = localStorage.getItem(TOKEN_KEY)
-
-      if (!token) {
-        throw new Error("로그인 후 후기를 작성할 수 있습니다.")
-      }
-
       if (isEditMode && reviewId) {
         const payload: UpdateSeatReviewPayload = reviewFields
-        await updateSeatReview(reviewId, payload, token)
+        await updateSeatReview(reviewId, payload)
         setSubmitMessage("후기가 수정되었습니다.")
         navigate("/")
         return
@@ -368,7 +367,7 @@ export default function ReviewCreatePage() {
         ...reviewFields,
       }
 
-      await createSeatReview(payload, token)
+      await createSeatReview(payload)
       setSubmitMessage("후기가 저장되었습니다.")
     }
     catch (err) {

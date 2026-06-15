@@ -1,18 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react"
 import {
   createComment,
   deleteComment,
   getComments,
+  likeComment,
+  reportComment,
+  unlikeComment,
   updateComment,
-} from "../api";
-import type { PublicComment } from "../types";
-import "./review-comments.css";
+} from "../api"
+import type { PublicComment } from "../types"
+import "./review-comments.css"
 
 type ReviewCommentsProps = {
-  reviewId: string;
-  authToken: string | null;
-  currentUserId?: string;
-};
+  reviewId: string
+  isAuthenticated: boolean
+  currentUserId?: string
+}
 
 function formatCommentTime(value: string) {
   return new Intl.DateTimeFormat("ko-KR", {
@@ -21,140 +24,346 @@ function formatCommentTime(value: string) {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(value));
+  }).format(new Date(value))
+}
+
+function updateCommentTree(
+  comments: PublicComment[],
+  commentId: string,
+  updater: (comment: PublicComment) => PublicComment,
+): PublicComment[] {
+  return comments.map((comment) => {
+    if (comment.id === commentId) {
+      return updater(comment)
+    }
+
+    return {
+      ...comment,
+      replies: updateCommentTree(comment.replies, commentId, updater),
+    }
+  })
 }
 
 export default function ReviewComments({
   reviewId,
-  authToken,
+  isAuthenticated,
   currentUserId,
 }: ReviewCommentsProps) {
-  const [comments, setComments] = useState<PublicComment[]>([]);
-  const [draftContent, setDraftContent] = useState("");
-  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
-  const [editingContent, setEditingContent] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const [comments, setComments] = useState<PublicComment[]>([])
+  const [draftContent, setDraftContent] = useState("")
+  const [replyingToId, setReplyingToId] = useState<string | null>(null)
+  const [replyContent, setReplyContent] = useState("")
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
+  const [editingContent, setEditingContent] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState("")
 
-  const commentCountLabel = useMemo(() => {
-    return comments.length === 0 ? "댓글 없음" : `댓글 ${comments.length}개`;
-  }, [comments.length]);
+  const commentCountLabel = useMemo(
+    () => (comments.length === 0 ? "No comments" : `${comments.length} threads`),
+    [comments.length],
+  )
 
   useEffect(() => {
-    let isMounted = true;
+    let isMounted = true
 
     async function loadComments() {
       try {
-        setError("");
-        setIsLoading(true);
-
-        const response = await getComments(reviewId, "oldest");
+        setError("")
+        setIsLoading(true)
+        const response = await getComments(reviewId, "oldest")
 
         if (isMounted) {
-          setComments(response.items);
+          setComments(response.items)
         }
       } catch (err) {
         if (isMounted) {
-          setError(err instanceof Error ? err.message : "댓글을 불러오지 못했습니다.");
+          setError(err instanceof Error ? err.message : "Failed to load comments.")
         }
       } finally {
         if (isMounted) {
-          setIsLoading(false);
+          setIsLoading(false)
         }
       }
     }
 
-    void loadComments();
+    void loadComments()
 
     return () => {
-      isMounted = false;
-    };
-  }, [reviewId]);
+      isMounted = false
+    }
+  }, [reviewId])
 
   async function handleCreateComment() {
-    if (!authToken) {
-      setError("로그인 후 댓글을 작성할 수 있습니다.");
-      return;
+    await submitComment(draftContent, undefined, (comment) => {
+      setComments((currentComments) => [...currentComments, comment])
+      setDraftContent("")
+    })
+  }
+
+  async function handleCreateReply(parentId: string) {
+    await submitComment(replyContent, parentId, (reply) => {
+      setComments((currentComments) =>
+        updateCommentTree(currentComments, parentId, (comment) => ({
+          ...comment,
+          replyCount: comment.replyCount + 1,
+          replies: [...comment.replies, reply],
+        })),
+      )
+      setReplyingToId(null)
+      setReplyContent("")
+    })
+  }
+
+  async function submitComment(
+    rawContent: string,
+    parentId: string | undefined,
+    onSuccess: (comment: PublicComment) => void,
+  ) {
+    if (!isAuthenticated) {
+      setError("Sign in to write a comment.")
+      return
     }
 
-    const content = draftContent.trim();
-
+    const content = rawContent.trim()
     if (!content) {
-      setError("댓글 내용을 입력해 주세요.");
-      return;
+      setError("Enter a comment.")
+      return
     }
 
     try {
-      setError("");
-      setIsSubmitting(true);
-
-      const comment = await createComment(reviewId, content, authToken);
-      setComments((currentComments) => [...currentComments, comment]);
-      setDraftContent("");
+      setError("")
+      setIsSubmitting(true)
+      const comment = await createComment(reviewId, content, parentId)
+      onSuccess(comment)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "댓글 작성에 실패했습니다.");
+      setError(err instanceof Error ? err.message : "Failed to create comment.")
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false)
     }
   }
 
   function startEditing(comment: PublicComment) {
-    setEditingCommentId(comment.id);
-    setEditingContent(comment.content);
-    setError("");
+    setEditingCommentId(comment.id)
+    setEditingContent(comment.content)
+    setError("")
   }
 
   async function handleUpdateComment(commentId: string) {
-    if (!authToken) {
-      setError("로그인 후 댓글을 수정할 수 있습니다.");
-      return;
+    if (!isAuthenticated) {
+      setError("Sign in to edit a comment.")
+      return
     }
 
-    const content = editingContent.trim();
-
+    const content = editingContent.trim()
     if (!content) {
-      setError("댓글 내용을 입력해 주세요.");
-      return;
+      setError("Enter a comment.")
+      return
     }
 
     try {
-      setError("");
-
-      const updatedComment = await updateComment(commentId, content, authToken);
+      setError("")
+      const updatedComment = await updateComment(commentId, content)
 
       setComments((currentComments) =>
-        currentComments.map((comment) =>
-          comment.id === commentId ? updatedComment : comment,
-        ),
-      );
-      setEditingCommentId(null);
-      setEditingContent("");
+        updateCommentTree(currentComments, commentId, () => updatedComment),
+      )
+      setEditingCommentId(null)
+      setEditingContent("")
     } catch (err) {
-      setError(err instanceof Error ? err.message : "댓글 수정에 실패했습니다.");
+      setError(err instanceof Error ? err.message : "Failed to update comment.")
     }
   }
 
   async function handleDeleteComment(commentId: string) {
-    if (!authToken) {
-      setError("로그인 후 댓글을 삭제할 수 있습니다.");
-      return;
+    if (!isAuthenticated) {
+      setError("Sign in to delete a comment.")
+      return
     }
 
-    if (!window.confirm("댓글을 삭제할까요?")) {
-      return;
+    if (!window.confirm("Delete this comment?")) {
+      return
     }
 
     try {
-      setError("");
-      await deleteComment(commentId, authToken);
+      setError("")
+      await deleteComment(commentId)
+      setComments((currentComments) =>
+        currentComments
+          .filter((comment) => comment.id !== commentId)
+          .map((comment) => ({
+            ...comment,
+            replies: comment.replies.filter((reply) => reply.id !== commentId),
+            replyCount:
+              comment.replies.some((reply) => reply.id === commentId)
+                ? Math.max(0, comment.replyCount - 1)
+                : comment.replyCount,
+          })),
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete comment.")
+    }
+  }
+
+  async function handleToggleLike(comment: PublicComment) {
+    if (!isAuthenticated) {
+      setError("Sign in to like a comment.")
+      return
+    }
+
+    try {
+      setError("")
+      if (comment.likedByMe) {
+        await unlikeComment(comment.id)
+      } else {
+        await likeComment(comment.id)
+      }
 
       setComments((currentComments) =>
-        currentComments.filter((comment) => comment.id !== commentId),
-      );
+        updateCommentTree(currentComments, comment.id, (currentComment) => ({
+          ...currentComment,
+          likedByMe: !currentComment.likedByMe,
+          likeCount: currentComment.likedByMe
+            ? Math.max(0, currentComment.likeCount - 1)
+            : currentComment.likeCount + 1,
+        })),
+      )
     } catch (err) {
-      setError(err instanceof Error ? err.message : "댓글 삭제에 실패했습니다.");
+      setError(err instanceof Error ? err.message : "Failed to update like.")
     }
+  }
+
+  async function handleReportComment(comment: PublicComment) {
+    if (!isAuthenticated) {
+      setError("Sign in to report a comment.")
+      return
+    }
+
+    const reason = window.prompt("Report reason")
+    if (!reason?.trim()) {
+      return
+    }
+
+    try {
+      setError("")
+      await reportComment(comment.id, reason.trim())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to report comment.")
+    }
+  }
+
+  function renderComment(comment: PublicComment, isReply = false) {
+    const canManage = comment.author.id === currentUserId
+    const isEditing = editingCommentId === comment.id
+
+    return (
+      <article className="review-comment-item" key={comment.id} data-reply={isReply || undefined}>
+        <div className="review-comment-meta">
+          <strong>{comment.author.nickname}</strong>
+          <span>{formatCommentTime(comment.createdAt)}</span>
+        </div>
+
+        {isEditing ? (
+          <div className="review-comment-edit">
+            <textarea
+              value={editingContent}
+              onChange={(event) => setEditingContent(event.target.value)}
+              rows={3}
+            />
+            <div>
+              <button type="button" onClick={() => handleUpdateComment(comment.id)}>
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingCommentId(null)
+                  setEditingContent("")
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p>{comment.content}</p>
+        )}
+
+        {comment.mentions.length > 0 ? (
+          <div className="review-comment-mentions">
+            {comment.mentions.map((mention) => (
+              <span key={mention}>@{mention}</span>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="review-comment-actions">
+          <button type="button" onClick={() => handleToggleLike(comment)} disabled={!isAuthenticated}>
+            {comment.likedByMe ? "Liked" : "Like"} {comment.likeCount}
+          </button>
+          {!isReply ? (
+            <button
+              type="button"
+              onClick={() => {
+                setReplyingToId(comment.id)
+                setReplyContent("")
+              }}
+              disabled={!isAuthenticated}
+            >
+              Reply {comment.replyCount}
+            </button>
+          ) : null}
+          <button type="button" onClick={() => handleReportComment(comment)} disabled={!isAuthenticated}>
+            Report
+          </button>
+          {canManage && !isEditing ? (
+            <>
+              <button type="button" onClick={() => startEditing(comment)}>
+                Edit
+              </button>
+              <button type="button" onClick={() => handleDeleteComment(comment.id)}>
+                Delete
+              </button>
+            </>
+          ) : null}
+        </div>
+
+        {!isReply && replyingToId === comment.id ? (
+          <div className="review-comment-reply-form">
+            <textarea
+              value={replyContent}
+              onChange={(event) => setReplyContent(event.target.value)}
+              placeholder="Write a reply."
+              rows={2}
+            />
+            <div>
+              <button
+                type="button"
+                onClick={() => handleCreateReply(comment.id)}
+                disabled={!replyContent.trim() || isSubmitting}
+              >
+                Post reply
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setReplyingToId(null)
+                  setReplyContent("")
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {!isReply && comment.replies.length > 0 ? (
+          <div className="review-comment-replies">
+            {comment.replies.map((reply) => renderComment(reply, true))}
+          </div>
+        ) : null}
+      </article>
+    )
   }
 
   return (
@@ -162,7 +371,7 @@ export default function ReviewComments({
       <header className="review-comments-header">
         <div>
           <p>{commentCountLabel}</p>
-          <h3 id="review-comments-title">댓글</h3>
+          <h3 id="review-comments-title">Comments</h3>
         </div>
       </header>
 
@@ -171,86 +380,31 @@ export default function ReviewComments({
           value={draftContent}
           onChange={(event) => setDraftContent(event.target.value)}
           placeholder={
-            authToken
-              ? "이 좌석 후기에 대한 질문이나 보충 의견을 남겨보세요."
-              : "로그인 후 댓글을 작성할 수 있습니다."
+            isAuthenticated
+              ? "Ask a question or add context about this seat."
+              : "Sign in to write a comment."
           }
-          disabled={!authToken || isSubmitting}
+          disabled={!isAuthenticated || isSubmitting}
           rows={3}
         />
         <div>
-          <span>{draftContent.trim().length}자</span>
-          <button
-            type="button"
-            onClick={handleCreateComment}
-            disabled={!authToken || isSubmitting}
-          >
-            {isSubmitting ? "작성 중" : "댓글 작성"}
+          <span>{draftContent.trim().length} chars</span>
+          <button type="button" onClick={handleCreateComment} disabled={!isAuthenticated || isSubmitting}>
+            {isSubmitting ? "Posting..." : "Post comment"}
           </button>
         </div>
       </div>
 
       {error ? <p className="review-comments-state review-comments-state--error">{error}</p> : null}
-      {isLoading ? <p className="review-comments-state">댓글을 불러오는 중입니다.</p> : null}
+      {isLoading ? <p className="review-comments-state">Loading comments...</p> : null}
 
       {!isLoading ? (
         comments.length > 0 ? (
-          <div className="review-comment-list">
-            {comments.map((comment) => {
-              const canManage = comment.author.id === currentUserId;
-              const isEditing = editingCommentId === comment.id;
-
-              return (
-                <article className="review-comment-item" key={comment.id}>
-                  <div className="review-comment-meta">
-                    <strong>{comment.author.nickname}</strong>
-                    <span>{formatCommentTime(comment.createdAt)}</span>
-                  </div>
-
-                  {isEditing ? (
-                    <div className="review-comment-edit">
-                      <textarea
-                        value={editingContent}
-                        onChange={(event) => setEditingContent(event.target.value)}
-                        rows={3}
-                      />
-                      <div>
-                        <button type="button" onClick={() => handleUpdateComment(comment.id)}>
-                          저장
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingCommentId(null);
-                            setEditingContent("");
-                          }}
-                        >
-                          취소
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <p>{comment.content}</p>
-                  )}
-
-                  {canManage && !isEditing ? (
-                    <div className="review-comment-actions">
-                      <button type="button" onClick={() => startEditing(comment)}>
-                        수정
-                      </button>
-                      <button type="button" onClick={() => handleDeleteComment(comment.id)}>
-                        삭제
-                      </button>
-                    </div>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
+          <div className="review-comment-list">{comments.map((comment) => renderComment(comment))}</div>
         ) : (
-          <p className="review-comments-state">아직 댓글이 없습니다.</p>
+          <p className="review-comments-state">No comments yet.</p>
         )
       ) : null}
     </section>
-  );
+  )
 }

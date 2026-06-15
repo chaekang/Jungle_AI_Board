@@ -28,6 +28,7 @@ export type ReviewBoardSearchState = {
   page: number;
   limit: number;
   searchText: string;
+  fixedTheaterId?: string;
   activeFilterMode?: ReviewBoardSearchFilter["mode"] | null;
   filterSearchText?: string;
   selectedFilter: ReviewBoardSearchFilter | null;
@@ -90,7 +91,9 @@ export function buildSeatReviewSearchQuery(
     query.q = q;
   }
 
-  if (selectedFilter?.mode === "theater") {
+  if (state.fixedTheaterId) {
+    query.theaterId = state.fixedTheaterId;
+  } else if (selectedFilter?.mode === "theater") {
     query.theater = selectedFilter.label;
   }
 
@@ -104,7 +107,12 @@ export function buildSeatReviewSearchQuery(
 
   const filterText = normalizeText(state.filterSearchText ?? "");
 
-  if (!selectedFilter && filterText && state.activeFilterMode === "theater") {
+  if (
+    !state.fixedTheaterId &&
+    !selectedFilter &&
+    filterText &&
+    state.activeFilterMode === "theater"
+  ) {
     query.theater = filterText;
   }
 

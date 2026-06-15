@@ -1,11 +1,10 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { getCurrentUser } from "../auth/api"
-import { TOKEN_KEY } from "../auth/constants"
+import { getCurrentUser, logout } from "../auth/api"
 import SeatAssistantPanel from "../agent/components/SeatAssistantPanel"
 import ReviewComments from "../comments/components/ReviewComments"
 import SeatReviewCard from "./components/SeatReviewCard"
-import { deleteSeatReview } from "./api"
+import { deleteSeatReview, reportSeatReview } from "./api"
 import { useSeatReviews } from "./hooks/useSeatReviews"
 import {
   getCanonicalTheaterName,
@@ -162,7 +161,6 @@ function makeUniqueFilters(reviews: PublicSeatReview[], mode: FilterMode, query:
 
 export default function ReviewBoardPage() {
   const navigate = useNavigate()
-  const [authToken, setAuthToken] = useState(() => localStorage.getItem(TOKEN_KEY))
   const [currentUser, setCurrentUser] = useState<PublicUser | null>(null)
   const [searchText, setSearchText] = useState("")
   const [activeFilterMode, setActiveFilterMode] = useState<FilterMode | null>(null)
@@ -223,6 +221,7 @@ export default function ReviewBoardPage() {
   const viewReviews = effectiveViewMode === "seatMap" ? seatMapReviews : reviews
   const viewIsLoading = effectiveViewMode === "seatMap" ? isLoadingSeatMapReviews : isLoading
   const viewError = effectiveViewMode === "seatMap" ? seatMapError : error
+  const isAuthenticated = Boolean(currentUser)
 
   const filterOptions = useMemo(
     () => makeUniqueFilters(reviews, filterMode, filterSearchText),
@@ -275,25 +274,17 @@ export default function ReviewBoardPage() {
   const totalPages = Math.max(1, Math.ceil(total / limit))
 
   useEffect(() => {
-    if (!authToken) {
-      return
-    }
-
     let isMounted = true
-    const token = authToken
 
     async function loadCurrentUser() {
       try {
-        const user = await getCurrentUser(token)
+        const user = await getCurrentUser()
 
         if (isMounted) {
           setCurrentUser(user)
         }
       } catch {
-        localStorage.removeItem(TOKEN_KEY)
-
         if (isMounted) {
-          setAuthToken(null)
           setCurrentUser(null)
         }
       }
@@ -304,7 +295,7 @@ export default function ReviewBoardPage() {
     return () => {
       isMounted = false
     }
-  }, [authToken])
+  }, [])
 
   useEffect(() => {
     if (!selectedReview) {
@@ -337,7 +328,7 @@ export default function ReviewBoardPage() {
   }, [isLogoutConfirmOpen])
 
   function handleWriteReview() {
-    if (authToken) {
+    if (isAuthenticated) {
       navigate("/reviews/new")
       return
     }
@@ -345,9 +336,8 @@ export default function ReviewBoardPage() {
     navigate("/auth", { state: { redirectTo: "/reviews/new" } })
   }
 
-  function handleLogout() {
-    localStorage.removeItem(TOKEN_KEY)
-    setAuthToken(null)
+  async function handleLogout() {
+    await logout().catch(() => undefined)
     setCurrentUser(null)
     setIsLogoutConfirmOpen(false)
   }
@@ -357,7 +347,7 @@ export default function ReviewBoardPage() {
   }
 
   async function handleDeleteReview(review: PublicSeatReview) {
-    if (!authToken) {
+    if (!isAuthenticated) {
       navigate("/auth", { state: { redirectTo: "/" } })
       return
     }
@@ -368,7 +358,7 @@ export default function ReviewBoardPage() {
 
     try {
       setActionError("")
-      await deleteSeatReview(review.id, authToken)
+      await deleteSeatReview(review.id)
       removeReview(review.id)
       removeSeatMapReview(review.id)
 
@@ -377,6 +367,25 @@ export default function ReviewBoardPage() {
       }
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "후기 삭제에 실패했습니다.")
+    }
+  }
+
+  async function handleReportReview(review: PublicSeatReview) {
+    if (!isAuthenticated) {
+      navigate("/auth", { state: { redirectTo: "/" } })
+      return
+    }
+
+    const reason = window.prompt("Report reason")
+    if (!reason?.trim()) {
+      return
+    }
+
+    try {
+      setActionError("")
+      await reportSeatReview(review.id, reason.trim())
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to report review.")
     }
   }
 
@@ -399,7 +408,7 @@ export default function ReviewBoardPage() {
         <header className="review-board-header">
           <h1>게시판</h1>
           <div className="review-board-auth-actions">
-            {authToken ? (
+            {isAuthenticated ? (
               <button type="button" onClick={() => setIsLogoutConfirmOpen(true)}>
                 로그아웃
               </button>
@@ -697,6 +706,8 @@ export default function ReviewBoardPage() {
                       key={review.id}
                       onDelete={handleDeleteReview}
                       onEdit={handleEditReview}
+                      onReport={handleReportReview}
+                      onTheaterSelect={(review) => navigate(`/theaters/${review.theater.id}`)}
                       review={review}
                       onSelect={setSelectedReview}
                     />
@@ -736,12 +747,13 @@ export default function ReviewBoardPage() {
               canManage={selectedReview.author.id === currentUser?.id}
               onDelete={handleDeleteReview}
               onEdit={handleEditReview}
+              onReport={handleReportReview}
               review={selectedReview}
               variant="detail"
             />
             <ReviewComments
-              authToken={authToken}
               currentUserId={currentUser?.id}
+              isAuthenticated={isAuthenticated}
               reviewId={selectedReview.id}
             />
           </section>

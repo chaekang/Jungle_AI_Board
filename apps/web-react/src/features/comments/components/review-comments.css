@@ -29,13 +29,15 @@
 }
 
 .review-comment-form,
-.review-comment-edit {
+.review-comment-edit,
+.review-comment-reply-form {
   display: grid;
   gap: 8px;
 }
 
 .review-comment-form textarea,
-.review-comment-edit textarea {
+.review-comment-edit textarea,
+.review-comment-reply-form textarea {
   width: 100%;
   min-height: 86px;
   resize: vertical;
@@ -49,7 +51,8 @@
 }
 
 .review-comment-form textarea:focus,
-.review-comment-edit textarea:focus {
+.review-comment-edit textarea:focus,
+.review-comment-reply-form textarea:focus {
   outline: 3px solid rgba(127, 34, 49, 0.12);
   border-color: #7f2231;
 }
@@ -61,6 +64,7 @@
 
 .review-comment-form > div,
 .review-comment-edit > div,
+.review-comment-reply-form > div,
 .review-comment-actions {
   display: flex;
   align-items: center;
@@ -77,6 +81,7 @@
 
 .review-comment-form button,
 .review-comment-edit button,
+.review-comment-reply-form button,
 .review-comment-actions button {
   min-height: 34px;
   padding: 0 14px;
@@ -103,6 +108,7 @@
 
 .review-comment-form button:hover:not(:disabled),
 .review-comment-edit button:hover,
+.review-comment-reply-form button:hover,
 .review-comment-actions button:hover {
   transform: translateY(-1px);
   border-color: #6f1d2a;
@@ -164,4 +170,35 @@
   margin: 0;
   color: #34171d;
   line-height: 1.65;
+}
+
+.review-comment-item[data-reply="true"] {
+  border-color: #efe4e7;
+  background: #fffdfd;
+}
+
+.review-comment-mentions,
+.review-comment-replies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.review-comment-mentions span {
+  color: #7b3141;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.review-comment-replies {
+  display: grid;
+  padding-left: 14px;
+  border-left: 2px solid #eadde0;
+}
+
+.review-comment-reply-form {
+  padding: 10px;
+  border: 1px solid #eadde0;
+  border-radius: 12px;
+  background: #fffafa;
 }

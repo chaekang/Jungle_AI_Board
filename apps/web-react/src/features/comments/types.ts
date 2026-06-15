@@ -6,6 +6,12 @@ export type PublicComment = {
     nickname: string;
   };
   content: string;
+  parentId: string | null;
+  mentions: string[];
+  replyCount: number;
+  likeCount: number;
+  likedByMe: boolean;
+  replies: PublicComment[];
   createdAt: string;
   updatedAt: string;
 };

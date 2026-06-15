@@ -91,4 +91,38 @@ assertDeepEqual(
   },
 );
 
+assertDeepEqual(
+  buildSeatReviewSearchQuery({
+    ...state,
+    fixedTheaterId: "theater-1",
+    searchText: "blue",
+    selectedFilter: {
+      id: "theater-2",
+      label: "other theater",
+      mode: "theater",
+    },
+    activeFilterMode: "theater",
+    filterSearchText: "other theater",
+  }),
+  {
+    page: 3,
+    limit: 12,
+    q: "blue",
+    theaterId: "theater-1",
+    seatFloor: "1층",
+    seatSection: "A",
+    seatRow: "7",
+    seatNumber: "15",
+    sort: "stageVisibility",
+  },
+);
+
+assertEqual(
+  buildSeatReviewSearchPath({
+    ...state,
+    fixedTheaterId: "theater-1",
+  }),
+  "/seat-reviews/search?page=3&limit=12&q=%EB%B8%94%EB%A3%A8&theaterId=theater-1&seatFloor=1%EC%B8%B5&seatSection=A&seatRow=7&seatNumber=15&tagId=tag-1&sort=stageVisibility",
+);
+
 console.log("review-search-query tests passed.");
