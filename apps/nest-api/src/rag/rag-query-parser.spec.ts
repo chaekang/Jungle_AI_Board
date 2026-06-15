@@ -57,6 +57,17 @@ describe('RagQueryParser', () => {
     });
   });
 
+  it('does not force ambiguous side block wording into left or right', async () => {
+    const parser = new RagQueryParser(makePrisma() as never);
+
+    await expect(parser.parse('사블 시야 어때?')).resolves.toMatchObject({
+      intent: 'view',
+    });
+    await expect(parser.parse('사블 시야 어때?')).resolves.not.toMatchObject({
+      side: expect.any(String),
+    });
+  });
+
   it('understands common theater aliases', async () => {
     const parser = new RagQueryParser(makePrisma() as never);
 

@@ -13,6 +13,7 @@ import { LoginDto } from './dto/login.dto';
 import type { AuthenticatedUser } from 'src/common/interfaces/authenticated-user.interface';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
+import { LoginRateLimitGuard } from './login-rate-limit.guard';
 
 // Controller: 어떤 URL이 어떤 함수를 부르는지 정하는 곳
 @Controller('auth')
@@ -25,6 +26,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @UseGuards(LoginRateLimitGuard)
   login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
   }
