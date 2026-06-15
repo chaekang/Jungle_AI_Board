@@ -261,7 +261,52 @@ throw new UnauthorizedException('Invalid email or password');
 
 ### ValidationPipe 기반 에러 처리
 
-`main.ts`에서는 전역 `ValidationPipe`를 사용한다.
+`ValidationPipe`는 NestJS에서 API로 들어온 요청 데이터가 DTO 규칙에 맞는지 검사하는 장치다. 쉽게 말하면 컨트롤러 앞에 서 있는 문지기다.
+
+예를 들어 회원가입 API가 다음 데이터를 기대한다고 하자.
+
+```json
+{
+  "email": "test@example.com",
+  "password": "123456"
+}
+```
+
+그런데 클라이언트가 다음처럼 보낼 수도 있다.
+
+```json
+{
+  "email": 123,
+  "password": "",
+  "isAdmin": true
+}
+```
+
+이 요청은 문제가 많다.
+
+- `email`은 이메일 문자열이어야 하는데 숫자가 들어왔다.
+- `password`는 비어 있다.
+- 서버가 받기로 하지 않은 `isAdmin` 같은 필드가 끼어 있다.
+
+`ValidationPipe`는 이런 요청을 컨트롤러와 서비스 로직에 도달하기 전에 검사한다. 잘못된 요청이면 보통 `400 Bad Request`로 막는다. 그래서 service는 이미 검증된 데이터만 받는다는 전제를 세울 수 있다.
+
+NestJS의 요청 흐름에서 보면 대략 다음 위치에 있다.
+
+```text
+Client Request
+  -> Middleware
+  -> Guard
+  -> Interceptor(before)
+  -> Pipe: ValidationPipe
+  -> Controller
+  -> Service
+  -> Interceptor(after)
+  -> Response
+```
+
+즉 `@Body()`, `@Query()`, `@Param()` 같은 입력값이 컨트롤러 메서드로 들어가기 전에 검사와 변환을 거친다.
+
+이 프로젝트의 `main.ts`에서는 전역 `ValidationPipe`를 사용한다.
 
 ```ts
 app.useGlobalPipes(
@@ -273,13 +318,27 @@ app.useGlobalPipes(
 );
 ```
 
-설정 의미는 다음과 같다.
+이렇게 전역으로 켜두면 특정 컨트롤러에만 적용되는 것이 아니라 Nest API 전체에 기본 입력 검증 규칙이 적용된다.
+
+핵심 옵션은 다음과 같다.
 
 - `whitelist: true`: DTO에 정의되지 않은 필드는 제거한다.
 - `forbidNonWhitelisted: true`: DTO에 없는 필드가 들어오면 에러를 낸다.
 - `transform: true`: query/body 값을 DTO 타입에 맞게 변환한다.
 
-예를 들어 `SeatReviewQueryDto`에서 숫자 query를 검증한다.
+`whitelist: true`는 DTO에 적힌 필드만 통과시키겠다는 뜻이다. 예를 들어 DTO에 `email`, `password`만 있는데 요청 body에 `isAdmin`이 같이 들어오면, 그 필드는 제거 대상이 된다.
+
+`forbidNonWhitelisted: true`는 한 단계 더 엄격하다. 알 수 없는 필드를 조용히 제거하는 대신 요청 자체를 실패시킨다. 이 프로젝트처럼 인증, 관리자, 신고, 후기 작성 같은 기능이 있는 서비스에서는 이 방식이 더 안전하다. 클라이언트가 의도하지 않은 필드를 보내서 내부 상태를 바꾸려는 시도를 초기에 막을 수 있기 때문이다.
+
+`transform: true`는 요청값을 DTO가 기대하는 타입에 맞게 바꿔준다. 특히 query string에서 중요하다. HTTP query 값은 기본적으로 문자열이다.
+
+```text
+GET /seat-reviews/search?page=1&limit=12
+```
+
+여기서 `page`와 `limit`은 처음에는 숫자 `1`, `12`가 아니라 문자열 `"1"`, `"12"`로 들어온다. DTO에서 변환 규칙을 같이 적어두면 숫자로 바꿔 검증할 수 있다.
+
+예를 들어 `SeatReviewQueryDto`에서 숫자 query를 다음처럼 검증한다.
 
 ```ts
 @Type(() => Number)
@@ -289,7 +348,34 @@ app.useGlobalPipes(
 limit?: number = 20;
 ```
 
-사용자가 `?limit=abc`를 보내면 validation 단계에서 막힌다. 잘못된 값이 service 로직까지 내려가지 않게 하는 구조다.
+이 규칙의 의미는 다음과 같다.
+
+- `@Type(() => Number)`: query string으로 들어온 값을 숫자로 변환한다.
+- `@IsInt()`: 정수인지 확인한다.
+- `@Min(1)`: 최소값은 1이어야 한다.
+- `@Max(50)`: 최대값은 50이어야 한다.
+- `limit?: number = 20`: 값이 없으면 기본값으로 20을 사용한다.
+
+사용자가 `?limit=abc`를 보내면 숫자로 변환할 수 없거나 정수 검증을 통과하지 못하므로 validation 단계에서 막힌다. 사용자가 `?limit=9999`를 보내도 `@Max(50)` 때문에 막힌다. 잘못된 값이 service 로직까지 내려가지 않게 하는 구조다.
+
+DTO validation은 다음 같은 곳에서 특히 중요하다.
+
+- 후기 작성 body
+- 후기 검색 query
+- 댓글 작성 body
+- 신고 요청 body
+- 로그인/회원가입 body
+- 관리자 moderation 요청 body
+
+전문적으로 보면 `ValidationPipe`는 보통 `class-validator`와 `class-transformer`를 함께 사용한다. DTO 클래스의 decorator가 검증 규칙이 되고, pipe가 런타임에서 그 규칙을 실행한다.
+
+정리하면 `ValidationPipe`는 세 가지 역할을 한다.
+
+- 검증: 타입, 길이, 형식, 필수값, 최소/최대값을 확인한다.
+- 정리: DTO에 없는 위험한 필드를 제거하거나 거절한다.
+- 변환: 문자열로 들어온 query/body 값을 숫자, boolean, DTO 인스턴스 등으로 바꾼다.
+
+그래서 이 프로젝트의 `ValidationPipe`는 단순한 편의 기능이 아니라, 컨트롤러와 서비스가 안전한 입력값을 전제로 동작하게 해주는 백엔드 입구의 방어선이다.
 
 ### 현재 에러 처리 평가
 
@@ -436,6 +522,44 @@ FastAPI 쪽 테스트는 Python 표준 `unittest` 스타일을 사용한다.
 ### API Design이란 무엇인가
 
 API Design은 클라이언트가 서버 기능을 어떻게 사용할지 정하는 설계다.
+
+조금 더 풀어서 말하면, 프론트엔드나 다른 프로그램이 백엔드 기능을 어떤 주소로 요청하고, 백엔드는 어떤 형식으로 응답할지 정하는 약속이다. 그래서 API 설계는 단순히 URL을 몇 개 만드는 일이 아니다. 기능의 이름, 요청 방식, 요청 데이터, 응답 데이터, 에러 형식, 인증 여부까지 함께 정하는 작업이다.
+
+예를 들어 "좌석 후기를 검색한다"라는 기능이 있다면 API 설계에서는 다음과 같은 요청 형태를 정한다.
+
+```http
+GET /seat-reviews/search?page=1&limit=12&sort=latest
+```
+
+이 요청은 다음 의미를 가진다.
+
+- `GET`: 데이터를 조회한다.
+- `/seat-reviews/search`: 좌석 후기 검색 기능이다.
+- `page=1`: 1페이지를 가져온다.
+- `limit=12`: 한 번에 12개를 가져온다.
+- `sort=latest`: 최신순으로 정렬한다.
+
+그리고 백엔드는 보통 다음처럼 예측 가능한 응답 구조를 돌려준다.
+
+```json
+{
+  "items": [
+    {
+      "id": "1",
+      "theaterName": "세종문화회관 대극장",
+      "musicalTitle": "웃는 남자",
+      "seatFloor": "1층",
+      "seatRow": "B",
+      "seatNumber": "12"
+    }
+  ],
+  "total": 34,
+  "page": 1,
+  "limit": 12
+}
+```
+
+이렇게 요청과 응답의 모양을 정해두면 프론트엔드는 "어디로 요청해야 하는지", "어떤 데이터를 받을 수 있는지", "페이지네이션은 어떻게 처리해야 하는지"를 안정적으로 알 수 있다. 반대로 API 설계가 흔들리면 프론트에서는 같은 기능인데 API마다 응답 모양이 다르거나, 어떤 API가 인증을 요구하는지 헷갈리는 문제가 생긴다. 백엔드에서도 기능을 추가할 때마다 규칙이 달라져 유지보수가 어려워진다.
 
 좋은 API 설계는 다음 질문에 답할 수 있어야 한다.
 
@@ -602,15 +726,21 @@ HTTP method도 대체로 REST 관례를 따른다.
 
 ### GraphQL이란 무엇인가
 
-GraphQL은 클라이언트가 필요한 데이터를 query 형태로 직접 지정해서 가져오는 API 방식이다.
+GraphQL은 클라이언트가 필요한 데이터를 query 형태로 직접 지정해서 가져오는 API 방식이다. 조금 더 쉽게 말하면, 서버가 미리 정해둔 응답 모양을 그대로 받는 것이 아니라, 클라이언트가 "이번 화면에 필요한 필드가 무엇인지"를 선언하고 서버가 그 모양에 맞춰 데이터를 돌려주는 방식이다.
 
-REST에서는 endpoint가 고정되어 있다.
+REST와 비교하면 차이가 더 분명하다.
 
-```text
+REST에서는 보통 서버가 미리 정해둔 endpoint를 호출한다.
+
+```http
 GET /seat-reviews/1
+GET /seat-reviews/1/comments
+GET /tags?reviewId=1
 ```
 
-GraphQL에서는 클라이언트가 필요한 필드를 직접 고른다.
+이 방식은 단순하고 HTTP 캐싱도 이해하기 쉽다. 하지만 한 화면에서 후기, 극장, 공연, 태그, 댓글을 함께 보여줘야 한다면 여러 API를 호출해야 할 수 있다. 반대로 `GET /seat-reviews/1` 응답에 너무 많은 필드를 넣어두면, 어떤 화면에서는 필요 없는 데이터까지 받아오게 된다.
+
+GraphQL에서는 보통 하나의 endpoint에 query를 보낸다.
 
 ```graphql
 query {
@@ -620,6 +750,11 @@ query {
     theater {
       name
     }
+    performance {
+      musical {
+        title
+      }
+    }
     tags {
       name
     }
@@ -627,19 +762,80 @@ query {
 }
 ```
 
+응답은 요청한 query 구조와 거의 같은 모양으로 돌아온다.
+
+```json
+{
+  "data": {
+    "seatReview": {
+      "id": "1",
+      "content": "1층 B열 시야가 좋았다.",
+      "theater": {
+        "name": "세종문화회관 대극장"
+      },
+      "performance": {
+        "musical": {
+          "title": "웃는 남자"
+        }
+      },
+      "tags": [
+        {
+          "name": "시야 좋음"
+        }
+      ]
+    }
+  }
+}
+```
+
+핵심은 "응답 구조가 query 구조를 따라간다"는 점이다. 그래서 프론트엔드는 화면에 필요한 데이터 모양을 코드에 직접 드러낼 수 있고, 백엔드는 GraphQL schema 안에서 허용된 데이터만 제공한다.
+
+GraphQL이 해결하려는 대표적인 문제는 두 가지다.
+
+- over-fetching: 이름만 필요한데 사용자 전체 정보처럼 필요 없는 데이터까지 받는 문제
+- under-fetching: 한 화면을 만들기 위해 여러 API를 연속으로 호출해야 하는 문제
+
+다만 GraphQL은 클라이언트가 DB를 마음대로 조회한다는 뜻이 아니다. 서버에는 schema가 있고, 클라이언트는 schema에 정의된 타입과 필드만 요청할 수 있다.
+
+예를 들어 schema가 다음처럼 정의되어 있다고 하자.
+
+```graphql
+type SeatReview {
+  id: ID!
+  content: String!
+  theater: Theater!
+  tags: [Tag!]!
+}
+
+type Theater {
+  id: ID!
+  name: String!
+}
+```
+
+그러면 클라이언트는 `id`, `content`, `theater`, `tags` 같은 허용된 필드를 요청할 수 있다. 하지만 schema에 없는 내부 필드나 민감한 값은 요청할 수 없다. 즉 GraphQL의 자유도는 "서버가 공개한 그래프 안에서의 자유도"다.
+
+GraphQL 작업은 보통 세 가지로 나뉜다.
+
+- `query`: 데이터를 읽을 때 사용한다.
+- `mutation`: 데이터를 생성, 수정, 삭제할 때 사용한다.
+- `subscription`: 채팅, 알림, 실시간 대시보드처럼 변경 사항을 계속 받을 때 사용한다.
+
 장점:
 
 - 필요한 필드만 받을 수 있다.
 - 여러 리소스를 한 요청으로 가져올 수 있다.
 - 화면별 데이터 요구사항을 명확히 표현할 수 있다.
 - schema 기반 타입 작업이 좋다.
+- 프론트엔드 화면 변화에 맞춰 데이터 조합을 유연하게 바꿀 수 있다.
 
-단점:
+단점과 주의점:
 
-- 서버 구현이 복잡해진다.
-- 캐싱이 REST보다 어려울 수 있다.
-- N+1 query 문제를 관리해야 한다.
-- 인증/권한을 field 단위로 세밀하게 설계해야 한다.
+- 서버 구현이 REST보다 복잡해질 수 있다.
+- 캐싱이 URL 중심 REST보다 어려울 수 있다.
+- query가 깊게 중첩되면 비용이 커질 수 있어 depth limit, complexity limit 같은 보호 장치가 필요하다.
+- resolver를 잘못 작성하면 N+1 query 문제가 생기기 쉽다.
+- 인증/권한을 endpoint 단위가 아니라 field와 resolver 단위까지 세밀하게 설계해야 한다.
 
 ### 이 프로젝트에서 GraphQL을 사용하는가
 
