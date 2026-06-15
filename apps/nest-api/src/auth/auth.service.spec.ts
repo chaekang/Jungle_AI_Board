@@ -108,6 +108,61 @@ describe('AuthService session security', () => {
     });
   });
 
+  it('creates an account and refresh session during Google login', async () => {
+    const { service, usersService, prisma } = createService();
+    usersService.findByEmail.mockResolvedValue(null);
+    usersService.create.mockImplementation(
+      ({ email, passwordHash, nickname }) => ({
+        id: 7n,
+        email,
+        passwordHash,
+        nickname,
+      }),
+    );
+
+    const result = await service.loginWithGoogle(
+      {
+        email: 'GoogleUser@example.com',
+        emailVerified: true,
+        name: 'Google User',
+      },
+      { ipAddress: '127.0.0.1', userAgent: 'jest' },
+    );
+
+    expect(usersService.create).toHaveBeenCalledWith({
+      email: 'googleuser@example.com',
+      passwordHash: expect.any(String),
+      nickname: 'Google User',
+    });
+    expect(result).toMatchObject({
+      accessToken: 'access.jwt',
+      user: {
+        id: '7',
+        email: 'googleuser@example.com',
+        nickname: 'Google User',
+      },
+    });
+    expect(prisma.authSession.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: 7n,
+        ipAddress: '127.0.0.1',
+        userAgent: 'jest',
+      }),
+    });
+  });
+
+  it('rejects Google login when the email is not verified', async () => {
+    const { service, usersService } = createService();
+
+    await expect(
+      service.loginWithGoogle({
+        email: 'user@example.com',
+        emailVerified: false,
+      }),
+    ).rejects.toThrow('Google account email is not verified');
+    expect(usersService.findByEmail).not.toHaveBeenCalled();
+  });
+
   it('rotates a valid refresh token and replaces the stored secret hash', async () => {
     const oldSecret = 'old-refresh-secret';
     const storedHash = await bcrypt.hash(oldSecret, 4);

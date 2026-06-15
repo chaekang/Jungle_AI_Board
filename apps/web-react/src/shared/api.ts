@@ -1,12 +1,12 @@
 const metaEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env
-const API_BASE_URL = metaEnv?.VITE_API_BASE_URL ?? "http://localhost:3000"
+export const API_BASE_URL = metaEnv?.VITE_API_BASE_URL ?? "http://localhost:3000"
 
 type ApiErrorResponse = {
   message?: string | string[]
 }
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(createApiUrl(path), {
     ...options,
     credentials: "include",
     headers: {
@@ -25,4 +25,8 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   }
 
   return data as T
+}
+
+export function createApiUrl(path: string) {
+  return new URL(path, API_BASE_URL).toString()
 }

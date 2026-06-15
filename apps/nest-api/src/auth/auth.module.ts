@@ -5,6 +5,7 @@ import { PassportModule } from '@nestjs/passport';
 import { UsersModule } from 'src/users/users.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { GoogleOAuthService } from './google-oauth.service';
 import { JwtStrategy } from './jwt.strategy';
 import type { StringValue } from 'ms';
 import { LoginRateLimitGuard } from './login-rate-limit.guard';
@@ -24,7 +25,12 @@ import { LoginRateLimitGuard } from './login-rate-limit.guard';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, LoginRateLimitGuard],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    LoginRateLimitGuard,
+    GoogleOAuthService,
+  ],
   exports: [AuthService],
 })
 export class AuthModule {}

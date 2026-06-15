@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import type { SubmitEvent } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
-import { checkEmail, getCurrentUser, login, logout, register } from "./api"
+import { checkEmail, getCurrentUser, getGoogleLoginUrl, login, logout, register } from "./api"
 import LoginPanel from "./components/LoginPanel"
 import SignupPanel from "./components/SignupPanel"
 import "./styles/auth-page.css"
@@ -60,6 +60,15 @@ export default function AuthPage() {
       isMounted = false
     }
   }, [])
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+
+    if (params.get("oauthError") === "google") {
+      setMessage("")
+      setError("Google login failed. Please try again.")
+    }
+  }, [location.search])
 
   async function handleRegister(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -175,13 +184,19 @@ export default function AuthPage() {
     }
   }
 
+  function handleGoogleLogin() {
+    window.location.assign(getGoogleLoginUrl(redirectPath))
+  }
+
   return (
     <main className="auth-page">
       <div className="auth-layout">
         <header className="auth-brand">
           <p className="brand-kicker">MUSICAL SEAT ARCHIVE</p>
           <h1>Agentic Board</h1>
-          <p className="brand-copy">A simple sign-in flow for reviews, seat notes, and saved activity.</p>
+          <p className="brand-copy">
+            A simple sign-in flow for reviews, seat notes, and saved activity.
+          </p>
           <button type="button" className="auth-home-button" onClick={() => navigate("/")}>
             Home
           </button>
@@ -202,6 +217,7 @@ export default function AuthPage() {
               email={loginEmail}
               onChangeEmail={setLoginEmail}
               onChangePassword={setLoginPassword}
+              onGoogleLogin={handleGoogleLogin}
               onShowSignup={() => {
                 setMessage("")
                 setError("")

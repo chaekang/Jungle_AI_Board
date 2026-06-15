@@ -1,4 +1,4 @@
-import { apiRequest } from "../../shared/api"
+import { apiRequest, createApiUrl } from "../../shared/api.ts"
 import type { CheckEmailResponse, LoginResponse, PublicUser } from "./types"
 
 type RegisterInput = {
@@ -35,8 +35,14 @@ export function getCurrentUser() {
 }
 
 export function checkEmail(email: string) {
-  return apiRequest<CheckEmailResponse>(
-    `/auth/check-email?email=${encodeURIComponent(email)}`,
-    { method: "GET" },
-  )
+  return apiRequest<CheckEmailResponse>(`/auth/check-email?email=${encodeURIComponent(email)}`, {
+    method: "GET",
+  })
+}
+
+export function getGoogleLoginUrl(redirectTo = "/") {
+  const url = new URL(createApiUrl("/auth/google"))
+  url.searchParams.set("redirectTo", redirectTo)
+
+  return url.toString()
 }

@@ -16,6 +16,7 @@ import {
   buildRefreshCookieValue,
   parseRefreshCookieValue,
 } from './auth-cookie.utils';
+import type { GoogleOAuthProfile } from './google-oauth.service';
 import { JwtPaylaod } from './interfaces/jwt-payload.interface';
 
 export type AuthRequestContext = {
@@ -79,6 +80,34 @@ export class AuthService {
     if (!passwordMatches) {
       throw new UnauthorizedException('Invalid email or password');
     }
+
+    return {
+      accessToken: await this.signAccessToken(user),
+      refreshToken: await this.createRefreshSession(user.id, context),
+      user: this.usersService.toPublicUser(user),
+    };
+  }
+
+  async loginWithGoogle(
+    profile: GoogleOAuthProfile,
+    context: AuthRequestContext = {},
+  ): Promise<AuthenticatedSessionResult> {
+    if (!profile.emailVerified) {
+      throw new UnauthorizedException('Google account email is not verified');
+    }
+
+    const email = profile.email.trim().toLowerCase();
+    if (!email) {
+      throw new UnauthorizedException('Google account email is required');
+    }
+
+    const user =
+      (await this.usersService.findByEmail(email)) ??
+      (await this.usersService.create({
+        email,
+        passwordHash: await bcrypt.hash(this.createOAuthPasswordSecret(), 10),
+        nickname: this.createGoogleNickname(profile),
+      }));
 
     return {
       accessToken: await this.signAccessToken(user),
@@ -185,10 +214,7 @@ export class AuthService {
     };
   }
 
-  async confirmPasswordReset(request: {
-    token: string;
-    newPassword: string;
-  }) {
+  async confirmPasswordReset(request: { token: string; newPassword: string }) {
     const parsedToken = parseRefreshCookieValue(request.token);
     if (!parsedToken) {
       throw new UnauthorizedException('Invalid password reset token');
@@ -282,6 +308,19 @@ export class AuthService {
     return randomBytes(48).toString('base64url');
   }
 
+  private createOAuthPasswordSecret() {
+    return `google-oauth:${randomBytes(64).toString('base64url')}`;
+  }
+
+  private createGoogleNickname(profile: GoogleOAuthProfile) {
+    const nickname =
+      profile.name?.trim() ||
+      profile.email.split('@')[0]?.trim() ||
+      'Google User';
+
+    return nickname.slice(0, 40);
+  }
+
   private createRefreshExpiry() {
     const ttlDays = Number(
       this.configService.get<string>('AUTH_REFRESH_TOKEN_TTL_DAYS') ?? '14',
@@ -293,7 +332,8 @@ export class AuthService {
 
   private createPasswordResetExpiry() {
     const ttlMinutes = Number(
-      this.configService.get<string>('PASSWORD_RESET_TOKEN_TTL_MINUTES') ?? '30',
+      this.configService.get<string>('PASSWORD_RESET_TOKEN_TTL_MINUTES') ??
+        '30',
     );
     const safeTtlMinutes =
       Number.isFinite(ttlMinutes) && ttlMinutes > 0 ? ttlMinutes : 30;
@@ -307,7 +347,8 @@ export class AuthService {
 
   private isProduction() {
     return (
-      this.configService.get<string>('NODE_ENV') ?? process.env.NODE_ENV
-    ) === 'production';
+      (this.configService.get<string>('NODE_ENV') ?? process.env.NODE_ENV) ===
+      'production'
+    );
   }
 }

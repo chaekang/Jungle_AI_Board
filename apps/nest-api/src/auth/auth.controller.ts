@@ -25,6 +25,7 @@ import { PasswordResetConfirmDto } from './dto/password-reset-confirm.dto';
 import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
 import { RegisterDto } from './dto/register.dto';
 import { AuthService, type AuthenticatedSessionResult } from './auth.service';
+import { GoogleOAuthService } from './google-oauth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { LoginRateLimitGuard } from './login-rate-limit.guard';
 
@@ -34,6 +35,7 @@ type SameSiteOption = CookieOptions['sameSite'];
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
+    private readonly googleOAuthService: GoogleOAuthService,
     @Optional() private readonly configService?: ConfigService,
   ) {}
 
@@ -85,6 +87,42 @@ export class AuthController {
     this.clearAuthCookies(response);
 
     return { ok: true };
+  }
+
+  @Get('google')
+  startGoogleLogin(
+    @Query('redirectTo') redirectTo: string | undefined,
+    @Res() response: Response,
+  ) {
+    response.redirect(
+      this.googleOAuthService.createAuthorizationUrl(redirectTo),
+    );
+  }
+
+  @Get('google/callback')
+  async finishGoogleLogin(
+    @Query('code') code: string | undefined,
+    @Query('state') state: string | undefined,
+    @Query('error') oauthError: string | undefined,
+    @Req() request: Request,
+    @Res() response: Response,
+  ) {
+    if (oauthError) {
+      response.redirect(this.googleOAuthService.createFrontendOAuthErrorUrl());
+      return;
+    }
+
+    const { redirectTo } = this.googleOAuthService.verifyState(state);
+    const profile = await this.googleOAuthService.exchangeCodeForProfile(code);
+    const result = await this.authService.loginWithGoogle(
+      profile,
+      this.getRequestContext(request),
+    );
+
+    this.setAuthCookies(response, result);
+    response.redirect(
+      this.googleOAuthService.createFrontendRedirectUrl(redirectTo),
+    );
   }
 
   @Post('password-reset/request')
