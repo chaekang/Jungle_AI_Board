@@ -110,6 +110,7 @@ def recommend_seat(request: SeatRecommendationRequest) -> SeatRecommendationResp
     client = NestClient()
     filters = _extract_filters(request, client)
     intent = _detect_intent(request.question)
+    focus_subject = _extract_focus_subject(request.question)
     mcp_status = "not_requested"
     rag_status = "skipped"
     rag_answer = None
@@ -144,7 +145,7 @@ def recommend_seat(request: SeatRecommendationRequest) -> SeatRecommendationResp
             rag_status = "fallback"
 
     scored = sorted(
-        (_score_review(review, filters) for review in reviews),
+        (_score_review(review, filters, focus_subject) for review in reviews),
         key=lambda item: item.score,
         reverse=True,
     )
@@ -162,8 +163,13 @@ def recommend_seat(request: SeatRecommendationRequest) -> SeatRecommendationResp
         official_section,
         descriptive_block,
         search_scope,
+        request.question,
     )
-    recommendation = local_answer if intent in {"obstruction_range", "op_assessment"} else rag_answer or local_answer
+    recommendation = (
+        local_answer
+        if intent in {"obstruction_range", "op_assessment"} or focus_subject
+        else rag_answer or local_answer
+    )
 
     return SeatRecommendationResponse(
         recommendation=recommendation,
@@ -189,6 +195,9 @@ def _extract_filters(request: SeatRecommendationRequest, client: NestClient) -> 
     musical_title = request.musical_title or _find_name(question, musicals, "title")
     season_label = request.season_label or _extract_season(question)
     priorities = list(dict.fromkeys([*request.priorities, *_extract_priorities(question)]))
+
+    if _has_focus_context(question):
+        priorities = list(dict.fromkeys([*priorities, "expression", "stageVisibility"]))
 
     if not priorities:
         priorities = ["view"]
@@ -439,7 +448,10 @@ def _evaluate_seat_candidate(
     )
     search_scope = _load_review_scope(client, candidate_filters, request.limit, intent)
     scored = sorted(
-        (_score_review(review, candidate_filters) for review in search_scope.reviews),
+        (
+            _score_review(review, candidate_filters, _extract_focus_subject(request.question))
+            for review in search_scope.reviews
+        ),
         key=lambda item: item.score,
         reverse=True,
     )
@@ -804,7 +816,11 @@ def _nearby_row_reviews(reviews: list[dict], target_row: str) -> list[dict]:
     return nearby
 
 
-def _score_review(review: dict, filters: AgentFilters) -> CandidateScore:
+def _score_review(
+    review: dict,
+    filters: AgentFilters,
+    focus_subject: str | None = None,
+) -> CandidateScore:
     ratings = review.get("ratings", {})
     score = 0.0
     for priority in filters.priorities:
@@ -813,6 +829,18 @@ def _score_review(review: dict, filters: AgentFilters) -> CandidateScore:
             score += float(ratings.get(rating_key, 0)) * 2
 
     tags = [tag.get("name", "") for tag in review.get("tags", [])]
+    content = str(review.get("content") or "")
+    searchable_text = _compact(" ".join([content, *tags]))
+
+    if focus_subject:
+        compact_focus = _compact(focus_subject)
+        if compact_focus and compact_focus in searchable_text:
+            score += 4
+        if any(keyword in content for keyword in ("동선", "등장", "표정", "붙", "자주")):
+            score += 1.5
+        if _has_obstruction_text(content, tags):
+            score -= 3
+
     if "lowObstruction" in filters.priorities and any("시야방해" in tag or "사이드" in tag for tag in tags):
         score -= 4
     if filters.side:
@@ -887,6 +915,59 @@ def _direction_label(block: str | None) -> str:
     }.get(block or "", "근거 후기 중심")
 
 
+def _has_obstruction_text(content: str, tags: list[str]) -> bool:
+    return any("시야방해" in tag or "가림" in tag for tag in tags) or any(
+        keyword in content for keyword in ("시야방해", "시야 방해", "가림", "난간", "스피커")
+    )
+
+
+def _evidence_section(review: EvidenceReview | None) -> str | None:
+    if review is None:
+        return None
+    match = re.search(r"\b([A-Z])구역\b", review.seat)
+    return match.group(1) if match else None
+
+
+def _evidence_side(review: EvidenceReview | None) -> str | None:
+    if review is None:
+        return None
+
+    text = " ".join([review.content, review.seat, *review.tags])
+    if any(keyword in text for keyword in ("왼쪽", "좌측", "왼블", "좌블")):
+        return "left"
+    if any(keyword in text for keyword in ("오른쪽", "우측", "우블", "오블")):
+        return "right"
+    if any(keyword in text for keyword in ("중앙", "중블", "센터")):
+        return "center"
+    return _section_to_side(_evidence_section(review))
+
+
+def _best_focus_evidence(evidence: list[EvidenceReview]) -> EvidenceReview | None:
+    for review in evidence:
+        if not _has_obstruction_text(review.content, review.tags):
+            return review
+    return evidence[0] if evidence else None
+
+
+def _obstructed_evidence(evidence: list[EvidenceReview]) -> EvidenceReview | None:
+    return next(
+        (
+            review
+            for review in evidence
+            if _has_obstruction_text(review.content, review.tags)
+        ),
+        None,
+    )
+
+
+def _movement_side_phrase(side: str | None) -> str | None:
+    return {
+        "left": "왼쪽",
+        "center": "중앙",
+        "right": "오른쪽",
+    }.get(side or "")
+
+
 def _build_answer(
     intent: str,
     filters: AgentFilters,
@@ -894,6 +975,7 @@ def _build_answer(
     official_section: str | None,
     block: str | None,
     search_scope: ReviewSearchScope,
+    question: str,
 ) -> str:
     if intent == "obstruction_range":
         return _build_obstruction_range(filters, search_scope.reviews)
@@ -901,7 +983,12 @@ def _build_answer(
         return _build_op_seat_assessment(evidence)
     if intent == "assessment":
         return _build_assessment(filters, evidence, search_scope)
-    return _build_recommendation(official_section, block, evidence)
+    return _build_recommendation(
+        official_section,
+        block,
+        evidence,
+        _extract_focus_subject(question),
+    )
 
 
 def _build_obstruction_range(filters: AgentFilters, reviews: list[dict]) -> str:
@@ -1021,7 +1108,52 @@ def _rating_phrase(value: float) -> str:
     return "아쉬울 가능성이 있어요"
 
 
-def _build_recommendation(official_section: str | None, block: str | None, evidence: list[EvidenceReview]) -> str:
+def _build_recommendation(
+    official_section: str | None,
+    block: str | None,
+    evidence: list[EvidenceReview],
+    focus_subject: str | None = None,
+) -> str:
+    if focus_subject:
+        if not evidence:
+            return (
+                f"{focus_subject} 기준으로 좌우 동선이나 시야방해를 판단할 만한 후기가 부족합니다. "
+                "배역 동선 질문은 전체 시야 좋은 구역보다 해당 배역이 언급된 후기가 쌓인 좌석을 먼저 확인하는 편이 안전합니다."
+            )
+
+        best_focus = _best_focus_evidence(evidence)
+        focus_section = _evidence_section(best_focus) or official_section
+        focus_side = _evidence_side(best_focus) or block
+        side_phrase = _movement_side_phrase(focus_side)
+        target = " ".join(
+            value
+            for value in [
+                f"{focus_section}구역" if focus_section else None,
+                _direction_label(focus_side) if focus_side else None,
+            ]
+            if value
+        )
+        obstructed = _obstructed_evidence(evidence)
+        parts = [
+            f"{focus_subject} 기준이면 {target or '근거 후기가 좋은 좌석'} 쪽을 먼저 보세요.",
+        ]
+
+        if side_phrase:
+            parts.append(
+                f"근거 후기에서 {focus_subject} 동선이 {side_phrase}에 자주 붙거나 표정 보기 좋다는 언급이 있어, 전체 중앙값보다 배역 동선을 우선해 잡는 편이 낫습니다."
+            )
+        else:
+            parts.append(
+                f"근거 후기에서 {focus_subject} 동선과 표정 체감이 직접 언급된 좌석을 우선했습니다."
+            )
+
+        if obstructed:
+            parts.append(
+                f"다만 {obstructed.seat}은 시야방해나 가림 언급이 있어 같은 방향 매물이어도 피하는 편이 좋습니다."
+            )
+
+        return " ".join(parts)
+
     if official_section:
         return f"{official_section}구역 {_direction_label(block)} 위주로 보는 편이 좋습니다."
     if block:

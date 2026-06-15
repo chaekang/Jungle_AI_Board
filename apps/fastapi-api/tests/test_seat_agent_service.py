@@ -672,6 +672,90 @@ class FloorComparisonFakeNestClient(FakeNestClient):
         return {"answer": "C구역 오른쪽블록 위주로 보는 편이 좋습니다."}
 
 
+class FocusRoleRecommendationFakeNestClient(FakeNestClient):
+    def get_json(self, path, params=None):
+        if path == "/theaters":
+            return [{"id": "1", "name": "세종문화회관 대극장"}]
+
+        if path == "/musicals":
+            return [{"id": "1", "title": "웃는 남자"}]
+
+        if path == "/seat-reviews/search":
+            return {
+                "items": [
+                    {
+                        "id": "701",
+                        "theater": {"name": "세종문화회관 대극장"},
+                        "musical": {"title": "웃는 남자"},
+                        "performance": {"seasonLabel": "2025"},
+                        "seat": {
+                            "floor": "1층",
+                            "section": "D",
+                            "row": "6",
+                            "number": "8",
+                        },
+                        "ratings": {
+                            "view": 4,
+                            "sound": 4,
+                            "comfort": 4,
+                            "expression": 5,
+                            "stageVisibility": 5,
+                        },
+                        "tags": [{"name": "시야좋음"}],
+                        "content": "데아 동선이 왼쪽에 자주 붙어서 D구역 왼블은 표정과 동선 보기 좋았습니다.",
+                    },
+                    {
+                        "id": "702",
+                        "theater": {"name": "세종문화회관 대극장"},
+                        "musical": {"title": "웃는 남자"},
+                        "performance": {"seasonLabel": "2025"},
+                        "seat": {
+                            "floor": "1층",
+                            "section": "E",
+                            "row": "8",
+                            "number": "18",
+                        },
+                        "ratings": {
+                            "view": 5,
+                            "sound": 4,
+                            "comfort": 4,
+                            "expression": 3,
+                            "stageVisibility": 4,
+                        },
+                        "tags": [{"name": "시야좋음"}],
+                        "content": "중앙이라 전체 시야는 좋지만 데아 동선 체감은 왼블보다 덜했습니다.",
+                    },
+                    {
+                        "id": "703",
+                        "theater": {"name": "세종문화회관 대극장"},
+                        "musical": {"title": "웃는 남자"},
+                        "performance": {"seasonLabel": "2025"},
+                        "seat": {
+                            "floor": "1층",
+                            "section": "F",
+                            "row": "1",
+                            "number": "28",
+                        },
+                        "ratings": {
+                            "view": 2,
+                            "sound": 4,
+                            "comfort": 3,
+                            "expression": 4,
+                            "stageVisibility": 2,
+                        },
+                        "tags": [{"name": "시야방해"}, {"name": "사이드시야"}],
+                        "content": "우블 앞쪽은 난간과 스피커 가림 때문에 데아가 오른쪽에 와도 놓치는 장면이 있었습니다.",
+                    },
+                ],
+                "hasNext": False,
+            }
+
+        return []
+
+    def post_json(self, path, body):
+        return {"answer": "E구역 중앙블록 위주로 보는 편이 좋습니다."}
+
+
 class SeatAgentServiceTest(unittest.TestCase):
     @patch("app.services.seat_agent_service.NestClient", return_value=FakeNestClient())
     def test_recommends_with_evidence_and_mcp_status(self, _):
@@ -955,6 +1039,29 @@ class SeatAgentServiceTest(unittest.TestCase):
         self.assertNotIn("참고한 근거 후기", result.recommendation)
         self.assertNotEqual(result.recommendation, "C구역 오른쪽블록 위주로 보는 편이 좋습니다.")
         self.assertEqual(result.filters.seat_floor, "1층")
+
+    @patch(
+        "app.services.seat_agent_service.NestClient",
+        return_value=FocusRoleRecommendationFakeNestClient(),
+    )
+    def test_focus_role_recommendation_uses_movement_reviews_and_obstruction_warning(self, _):
+        result = recommend_seat(
+            SeatRecommendationRequest(
+                question="웃남 데아보러 가는데 어떤 자리가 좋을까?",
+                theaterName="세종문화회관 대극장",
+                musicalTitle="웃는 남자",
+                useRag=True,
+                limit=5,
+            )
+        )
+
+        self.assertIn("데아", result.recommendation)
+        self.assertIn("왼쪽", result.recommendation)
+        self.assertIn("D구역", result.recommendation)
+        self.assertIn("시야방해", result.recommendation)
+        self.assertIn("피하는", result.recommendation)
+        self.assertNotEqual(result.recommendation, "E구역 중앙블록 위주로 보는 편이 좋습니다.")
+        self.assertEqual(result.direction, "왼쪽블록")
 
 
 if __name__ == "__main__":
