@@ -1,0 +1,223 @@
+<mxfile host="app.diagrams.net" modified="2026-06-17T00:00:00.000Z" agent="Codex" version="24.7.17">
+  <diagram id="rag-flow" name="RAG Flow">
+    <mxGraphModel dx="1900" dy="1300" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1900" pageHeight="1450" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="title" value="RAG 흐름도" style="text;html=1;strokeColor=none;fillColor=none;fontSize=28;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="700" y="30" width="500" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="sub" value="FastAPI 에이전트의 RAG 호출 여부 + Nest RAG 검색/생성/인덱싱 흐름" style="text;html=1;strokeColor=none;fillColor=none;fontSize=15;align=center;verticalAlign=middle;fontColor=#4B5563;" vertex="1" parent="1">
+          <mxGeometry x="570" y="80" width="760" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="lane-fastapi" value="FastAPI 에이전트에서 RAG를 호출하는 흐름" style="swimlane;html=1;rounded=0;startSize=34;fillColor=#EFF6FF;strokeColor=#93C5FD;fontSize=16;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="130" width="600" height="1180" as="geometry"/>
+        </mxCell>
+        <mxCell id="lane-nest" value="Nest RAG 질문 답변 흐름" style="swimlane;html=1;rounded=0;startSize=34;fillColor=#F0FDF4;strokeColor=#86EFAC;fontSize=16;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="690" y="130" width="760" height="1180" as="geometry"/>
+        </mxCell>
+        <mxCell id="lane-index" value="RAG 임베딩 인덱싱 흐름" style="swimlane;html=1;rounded=0;startSize=34;fillColor=#FFF7ED;strokeColor=#FDBA74;fontSize=16;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1500" y="130" width="360" height="1180" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="f1" value="사용자 질문" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="225" y="190" width="220" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="f2" value="/agent/seat-recommendations" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="225" y="285" width="220" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="f3" value="recommend_seat()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BFDBFE;strokeColor=#1D4ED8;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="225" y="380" width="220" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="f4" value="_extract_filters()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#60A5FA;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="225" y="475" width="220" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="f5" value="external_production 있음?&lt;br&gt;MCP로 외부 공연장 찾았나?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#60A5FA;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="250" y="570" width="170" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="f6" value="RAG 생략&lt;br&gt;ragStatus=skipped&lt;br&gt;같은 극장 다른 뮤지컬 후기만 사용" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#D97706;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="55" y="705" width="240" height="85" as="geometry"/>
+        </mxCell>
+        <mxCell id="f7" value="request.use_rag = true?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#60A5FA;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="355" y="705" width="170" height="95" as="geometry"/>
+        </mxCell>
+        <mxCell id="f8" value="RAG 생략&lt;br&gt;ragStatus=skipped" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F2FE;strokeColor=#0284C7;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="390" y="850" width="190" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="f9" value="NestClient.post_json&lt;br&gt;/rag/questions&lt;br&gt;{ question, limit: 10 }" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="160" y="855" width="220" height="85" as="geometry"/>
+        </mxCell>
+        <mxCell id="f10" value="NestClientError?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#60A5FA;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="190" y="980" width="160" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="f11" value="오류 발생&lt;br&gt;ragStatus=fallback" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEE2E2;strokeColor=#DC2626;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="55" y="1110" width="190" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="f12" value="answer 있음?&lt;br&gt;있으면 ragStatus=ok&lt;br&gt;없으면 ragStatus=empty" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#2563EB;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="280" y="1110" width="250" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="f13" value="최종 답변 선택&lt;br&gt;focus/특수 의도면 local_answer&lt;br&gt;그 외 ragAnswer 우선" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BFDBFE;strokeColor=#1D4ED8;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="205" y="1230" width="270" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="n1" value="RagController&lt;br&gt;POST /rag/questions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#16A34A;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="945" y="190" width="230" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="n2" value="RagService.ask(question, limit)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BBF7D0;strokeColor=#15803D;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="945" y="295" width="230" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n3" value="question.trim()&lt;br&gt;2글자 미만이면 BadRequest" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#22C55E;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="945" y="395" width="230" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="n4" value="RagQueryParser.parse()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#16A34A;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="945" y="500" width="230" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="n5" value="DB에서 theaters / musicals 조회&lt;br&gt;이름 alias 매칭" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#22C55E;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="725" y="600" width="230" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="n6" value="좌석 조건 추출&lt;br&gt;층 / 구역 / 열 / 번호 / side" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#22C55E;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="975" y="600" width="220" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="n7" value="태그 / 범위 질문 / intent 추출&lt;br&gt;view / sound / comfort / expression / stageVisibility / general" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#22C55E;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1215" y="600" width="220" height="85" as="geometry"/>
+        </mxCell>
+        <mxCell id="n8" value="좌석 후기 질문인가?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#22C55E;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="980" y="735" width="160" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="n9" value="아니오&lt;br&gt;일반 작품 설명 거절 답변&lt;br&gt;logQuery 후 반환" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEE2E2;strokeColor=#DC2626;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="725" y="740" width="220" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="n10" value="findRelevantSources()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#16A34A;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="970" y="870" width="190" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="n11" value="safeLimit 계산&lt;br&gt;일반 8 이상 / 범위·태그 20 이상" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#22C55E;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="720" y="970" width="220" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="n12" value="직접 SQL 검색 exact&lt;br&gt;조건 정확히 맞는 후기" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#16A34A;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="965" y="965" width="210" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="n13" value="후기가 부족하고 seatRow 있음?&lt;br&gt;nearbyRow 검색" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#16A34A;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1205" y="960" width="220" height="75" as="geometry"/>
+        </mxCell>
+        <mxCell id="n14" value="그래도 부족하면 sameScope 검색&lt;br&gt;층/구역 등 넓힌 범위" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#16A34A;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="725" y="1080" width="230" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="n15" value="seat_review_embeddings 존재?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#22C55E;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="995" y="1070" width="170" height="95" as="geometry"/>
+        </mxCell>
+        <mxCell id="n16" value="질문 임베딩 생성&lt;br&gt;OpenAI embeddings" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EDE9FE;strokeColor=#7C3AED;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1215" y="1080" width="210" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="n17" value="벡터 검색&lt;br&gt;embedding &lt;=&gt; query vector&lt;br&gt;조건 + intent 정렬" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EDE9FE;strokeColor=#7C3AED;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1215" y="1185" width="210" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="n18" value="mergeSources()&lt;br&gt;중복 제거 후 limit만큼 자름" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#16A34A;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="970" y="1210" width="210" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="n19" value="sources.length === 0?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#22C55E;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="760" y="1210" width="150" height="85" as="geometry"/>
+        </mxCell>
+        <mxCell id="n20" value="맞는 후기 없음 안전 답변&lt;br&gt;logQuery 후 반환" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEE2E2;strokeColor=#DC2626;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="700" y="1330" width="220" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="n21" value="buildTagRangeAnswer()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#16A34A;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="970" y="1330" width="210" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="n22" value="범위 답변 가능?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#22C55E;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="1318" width="150" height="85" as="geometry"/>
+        </mxCell>
+        <mxCell id="n23" value="OpenAI responses 호출&lt;br&gt;제공된 후기 안에서만 답변 생성" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EDE9FE;strokeColor=#7C3AED;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1490" y="1320" width="230" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="n24" value="RagAnswer 반환&lt;br&gt;answer / reasons / filters / sources&lt;br&gt;logQuery 저장" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BBF7D0;strokeColor=#15803D;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="1200" width="230" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="i1" value="POST /rag/index/:reviewId" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FED7AA;strokeColor=#EA580C;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1565" y="210" width="230" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="i2" value="upsertReviewEmbedding(reviewId)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEDD5;strokeColor=#F97316;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1565" y="310" width="230" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="i3" value="seatReview.findUnique&lt;br&gt;ragSeatReviewInclude" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#FB923C;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1565" y="410" width="230" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="i4" value="review 없음?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#FB923C;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1600" y="515" width="160" height="85" as="geometry"/>
+        </mxCell>
+        <mxCell id="i5" value="BadRequest&lt;br&gt;Seat review not found" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEE2E2;strokeColor=#DC2626;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1515" y="635" width="165" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="i6" value="VISIBLE 아니거나 deletedAt 있음?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#FB923C;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1700" y="625" width="160" height="95" as="geometry"/>
+        </mxCell>
+        <mxCell id="i7" value="deleteReviewEmbedding()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEE2E2;strokeColor=#DC2626;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1675" y="760" width="180" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="i8" value="buildSeatReviewRagDocument()&lt;br&gt;buildSeatReviewRagMetadata()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#FB923C;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1565" y="855" width="230" height="75" as="geometry"/>
+        </mxCell>
+        <mxCell id="i9" value="OpenAI embedding 생성&lt;br&gt;text-embedding-3-small 기본" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EDE9FE;strokeColor=#7C3AED;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1565" y="970" width="230" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="i10" value="1536차원 검증&lt;br&gt;toVectorLiteral()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#FB923C;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1565" y="1080" width="230" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="i11" value="seat_review_embeddings UPSERT&lt;br&gt;document_version=seat-review-v2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FED7AA;strokeColor=#EA580C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1565" y="1190" width="230" height="75" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e1" edge="1" parent="1" source="f1" target="f2" style="endArrow=block;html=1;strokeColor=#2563EB;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="f2" target="f3" style="endArrow=block;html=1;strokeColor=#2563EB;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="f3" target="f4" style="endArrow=block;html=1;strokeColor=#2563EB;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="f4" target="f5" style="endArrow=block;html=1;strokeColor=#2563EB;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="f5" target="f6" style="endArrow=block;html=1;strokeColor=#D97706;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="f5" target="f7" style="endArrow=block;html=1;strokeColor=#2563EB;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="f7" target="f8" style="endArrow=block;html=1;strokeColor=#0284C7;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="f7" target="f9" style="endArrow=block;html=1;strokeColor=#2563EB;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="f9" target="f10" style="endArrow=block;html=1;strokeColor=#2563EB;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="f10" target="f11" style="endArrow=block;html=1;strokeColor=#DC2626;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="f10" target="f12" style="endArrow=block;html=1;strokeColor=#2563EB;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e12" edge="1" parent="1" source="f11" target="f13" style="endArrow=block;html=1;strokeColor=#2563EB;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e13" edge="1" parent="1" source="f12" target="f13" style="endArrow=block;html=1;strokeColor=#2563EB;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e14" edge="1" parent="1" source="f9" target="n1" style="endArrow=block;html=1;strokeColor=#16A34A;dashed=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e15" edge="1" parent="1" source="n1" target="n2" style="endArrow=block;html=1;strokeColor=#16A34A;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e16" edge="1" parent="1" source="n2" target="n3" style="endArrow=block;html=1;strokeColor=#16A34A;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e17" edge="1" parent="1" source="n3" target="n4" style="endArrow=block;html=1;strokeColor=#16A34A;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e18" edge="1" parent="1" source="n4" target="n5" style="endArrow=block;html=1;strokeColor=#16A34A;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e19" edge="1" parent="1" source="n4" target="n6" style="endArrow=block;html=1;strokeColor=#16A34A;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e20" edge="1" parent="1" source="n4" target="n7" style="endArrow=block;html=1;strokeColor=#16A34A;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e21" edge="1" parent="1" source="n6" target="n8" style="endArrow=block;html=1;strokeColor=#16A34A;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e22" edge="1" parent="1" source="n8" target="n9" style="endArrow=block;html=1;strokeColor=#DC2626;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e23" edge="1" parent="1" source="n8" target="n10" style="endArrow=block;html=1;strokeColor=#16A34A;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e24" edge="1" parent="1" source="n10" target="n11" style="endArrow=block;html=1;strokeColor=#16A34A;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e25" edge="1" parent="1" source="n10" target="n12" style="endArrow=block;html=1;strokeColor=#16A34A;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e26" edge="1" parent="1" source="n12" target="n13" style="endArrow=block;html=1;strokeColor=#16A34A;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e27" edge="1" parent="1" source="n13" target="n14" style="endArrow=block;html=1;strokeColor=#16A34A;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e28" edge="1" parent="1" source="n14" target="n15" style="endArrow=block;html=1;strokeColor=#16A34A;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e29" edge="1" parent="1" source="n15" target="n16" style="endArrow=block;html=1;strokeColor=#7C3AED;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e30" edge="1" parent="1" source="n16" target="n17" style="endArrow=block;html=1;strokeColor=#7C3AED;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e31" edge="1" parent="1" source="n17" target="n18" style="endArrow=block;html=1;strokeColor=#7C3AED;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e32" edge="1" parent="1" source="n15" target="n18" style="endArrow=block;html=1;strokeColor=#16A34A;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e33" edge="1" parent="1" source="n18" target="n19" style="endArrow=block;html=1;strokeColor=#16A34A;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e34" edge="1" parent="1" source="n19" target="n20" style="endArrow=block;html=1;strokeColor=#DC2626;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e35" edge="1" parent="1" source="n19" target="n21" style="endArrow=block;html=1;strokeColor=#16A34A;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e36" edge="1" parent="1" source="n21" target="n22" style="endArrow=block;html=1;strokeColor=#16A34A;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e37" edge="1" parent="1" source="n22" target="n24" style="endArrow=block;html=1;strokeColor=#16A34A;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e38" edge="1" parent="1" source="n22" target="n23" style="endArrow=block;html=1;strokeColor=#7C3AED;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e39" edge="1" parent="1" source="n23" target="n24" style="endArrow=block;html=1;strokeColor=#7C3AED;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e40" edge="1" parent="1" source="i1" target="i2" style="endArrow=block;html=1;strokeColor=#EA580C;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e41" edge="1" parent="1" source="i2" target="i3" style="endArrow=block;html=1;strokeColor=#EA580C;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e42" edge="1" parent="1" source="i3" target="i4" style="endArrow=block;html=1;strokeColor=#EA580C;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e43" edge="1" parent="1" source="i4" target="i5" style="endArrow=block;html=1;strokeColor=#DC2626;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e44" edge="1" parent="1" source="i4" target="i6" style="endArrow=block;html=1;strokeColor=#EA580C;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e45" edge="1" parent="1" source="i6" target="i7" style="endArrow=block;html=1;strokeColor=#DC2626;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e46" edge="1" parent="1" source="i6" target="i8" style="endArrow=block;html=1;strokeColor=#EA580C;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e47" edge="1" parent="1" source="i8" target="i9" style="endArrow=block;html=1;strokeColor=#7C3AED;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e48" edge="1" parent="1" source="i9" target="i10" style="endArrow=block;html=1;strokeColor=#EA580C;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e49" edge="1" parent="1" source="i10" target="i11" style="endArrow=block;html=1;strokeColor=#EA580C;"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
