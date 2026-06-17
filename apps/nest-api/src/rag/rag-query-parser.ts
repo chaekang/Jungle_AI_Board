@@ -48,20 +48,21 @@ export class RagQueryParser {
   async parse(question: string): Promise<RagQuestionFilters> {
     const normalized = question.trim();
     const [theaters, musicals] = await Promise.all([
-      this.prisma.theater.findMany({
+      this.prisma.theater.findMany({  // DB에서 극장 목록 가져오기
         select: { id: true, name: true },
         orderBy: { name: 'asc' },
       }),
-      this.prisma.musical.findMany({
+      this.prisma.musical.findMany({  // DB에서 작품 목록 가져오기
         select: { id: true, title: true },
         orderBy: { title: 'asc' },
       }),
     ]);
 
+    // 가장 잘 맞는 극장/작품 이름 찾기
     const theater = this.findBestNameMatch(normalized, theaters, 'name');
     const musical = this.findBestNameMatch(normalized, musicals, 'title');
 
-    const seat = this.extractSeat(normalized);
+    const seat = this.extractSeat(normalized);  // 좌석 정보 추출
     const asksRange = this.extractAsksRange(normalized);
 
     if (asksRange && seat.seatRow && !/^\d+$/.test(seat.seatRow)) {

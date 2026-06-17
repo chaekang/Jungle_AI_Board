@@ -54,20 +54,35 @@ export class RagService {
   ) {}
 
   async ask(question: string, limit = 5): Promise<RagAnswer> {
-    const startedAt = Date.now();
-    const normalizedQuestion = question.trim();
+    const startedAt = Date.now();   // 시작 시간 기록
+    const normalizedQuestion = question.trim();   // 질문 trim
 
     if (normalizedQuestion.length < 2) {
       throw new BadRequestException('question must be at least 2 characters');
     }
 
-    const filters = await this.queryParser.parse(normalizedQuestion);
+    const filters = await this.queryParser.parse(normalizedQuestion);  // 질문 필터 추출
+
+    if (!this.isSeatReviewQuestion(normalizedQuestion, filters)) {
+      const result = {
+        answer:
+          '저는 좌석 후기 기준으로만 답할 수 있어요. 작품 줄거리, 원작, 작가 같은 일반 설명 대신 극장명, 층, 구역, 열, 시야, 음향, 좌석 편안함처럼 좌석 후기와 연결된 조건으로 물어봐 주세요.',
+        reasons: ['좌석 후기와 연결된 질문이 아니어서 일반 작품 설명은 답하지 않았습니다.'],
+        filters,
+        sources: [],
+      };
+      await this.logQuery(normalizedQuestion, result, startedAt);
+      return result;
+    }
+
+    // 관련 후기 source 찾기
     const sources = await this.findRelevantSources(
       normalizedQuestion,
       filters,
       limit,
     );
 
+    // 관련 후기 source가 없으면 안전 답변 계산
     if (sources.length === 0) {
       const result = {
         answer:
@@ -82,6 +97,7 @@ export class RagService {
 
     const rangeAnswer = await this.buildTagRangeAnswer(filters);
 
+    // 범위 질문 답변이 가능하면 openai 호출 없이 답변 반환
     if (rangeAnswer) {
       const result = {
         answer: rangeAnswer,
@@ -93,6 +109,7 @@ export class RagService {
       return result;
     }
 
+    // openai 답변 만듦
     const answer = await this.openAi.createAnswer({
       question: normalizedQuestion,
       filters,
@@ -105,8 +122,33 @@ export class RagService {
       filters,
       sources,
     };
-    await this.logQuery(normalizedQuestion, result, startedAt);
+    await this.logQuery(normalizedQuestion, result, startedAt);  // 질문 로그를 남김
     return result;
+  }
+
+  private isSeatReviewQuestion(
+    question: string,
+    filters: RagQuestionFilters,
+  ) {
+    if (filters.intent !== 'general') {
+      return true;
+    }
+
+    if (
+      filters.seatFloor ||
+      filters.seatSection ||
+      filters.seatRow ||
+      filters.seatNumber ||
+      filters.side ||
+      filters.tagName ||
+      filters.asksRange
+    ) {
+      return true;
+    }
+
+    return /좌석|자리|후기|리뷰|관람|시야|음향|소리|편안|편해|불편|무대|배우|표정|동선|시야방해|가림|구역|블록|블럭|층|열|번/.test(
+      question,
+    );
   }
 
   async upsertReviewEmbedding(reviewId: bigint) {
