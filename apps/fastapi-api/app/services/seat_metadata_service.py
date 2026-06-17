@@ -28,10 +28,15 @@ class SeatLayoutDefinition:
     aliases: tuple[str, ...]
     floors: tuple[str, ...]
     sections_by_floor: dict[str, tuple[str, ...]]
+    section_sides_by_floor: dict[str, dict[str, str]]
     seat_map_url: str | None = None
 
 
 def _sections(*values: str) -> tuple[str, ...]:
+    return values
+
+
+def _sides(**values: str) -> dict[str, str]:
     return values
 
 
@@ -45,6 +50,11 @@ SEAT_LAYOUTS: tuple[SeatLayoutDefinition, ...] = (
             "2층": _sections("A", "B", "C", "D", "E", "F", "G"),
             "3층": _sections("A", "B", "C", "D", "E", "F", "G", "H"),
         },
+        section_sides_by_floor={
+            "1층": _sides(A="left", B="center", C="right", D="left", E="right"),
+            "2층": _sides(A="left", B="center", C="right", D="left", E="center", F="right", G="left"),
+            "3층": _sides(A="left", B="center", C="right", D="left", E="center", F="right", G="left", H="center"),
+        },
         seat_map_url="https://www.sejongpac.or.kr/portal/main/contents.do?menuNo=200195",
     ),
     SeatLayoutDefinition(
@@ -55,6 +65,10 @@ SEAT_LAYOUTS: tuple[SeatLayoutDefinition, ...] = (
             "1층": _sections("A", "B", "C"),
             "2층": _sections("A", "B", "C"),
         },
+        section_sides_by_floor={
+            "1층": _sides(A="left", B="center", C="right"),
+            "2층": _sides(A="left", B="center", C="right"),
+        },
         seat_map_url="https://www.sejongpac.or.kr/portal/main/contents.do?menuNo=200195",
     ),
     SeatLayoutDefinition(
@@ -62,6 +76,7 @@ SEAT_LAYOUTS: tuple[SeatLayoutDefinition, ...] = (
         aliases=("세종문화회관 S씨어터", "세종 S씨어터"),
         floors=("1층",),
         sections_by_floor={"1층": _sections("A", "B", "C")},
+        section_sides_by_floor={"1층": _sides(A="left", B="center", C="right")},
         seat_map_url="https://www.sejongpac.or.kr/portal/main/contents.do?menuNo=200195",
     ),
     SeatLayoutDefinition(
@@ -73,6 +88,11 @@ SEAT_LAYOUTS: tuple[SeatLayoutDefinition, ...] = (
             "2층": _sections("A", "B", "C"),
             "3층": _sections("A", "B", "C"),
         },
+        section_sides_by_floor={
+            "1층": _sides(A="left", B="center", C="right"),
+            "2층": _sides(A="left", B="center", C="right"),
+            "3층": _sides(A="left", B="center", C="right"),
+        },
         seat_map_url="https://www.bluesquare.kr",
     ),
     SeatLayoutDefinition(
@@ -83,6 +103,10 @@ SEAT_LAYOUTS: tuple[SeatLayoutDefinition, ...] = (
             "1층": _sections("A", "B", "C", "D"),
             "2층": _sections("A", "B", "C"),
         },
+        section_sides_by_floor={
+            "1층": _sides(A="left", B="center", C="center", D="right"),
+            "2층": _sides(A="left", B="center", C="right"),
+        },
         seat_map_url="https://www.towntom.com",
     ),
     SeatLayoutDefinition(
@@ -92,6 +116,10 @@ SEAT_LAYOUTS: tuple[SeatLayoutDefinition, ...] = (
         sections_by_floor={
             "1층": _sections("A", "B", "C"),
             "2층": _sections("A", "B", "C"),
+        },
+        section_sides_by_floor={
+            "1층": _sides(A="left", B="center", C="right"),
+            "2층": _sides(A="left", B="center", C="right"),
         },
         seat_map_url="https://www.towntom.com",
     ),
@@ -105,6 +133,11 @@ FALLBACK_LAYOUT = SeatLayoutDefinition(
         "1층": tuple(),
         "2층": tuple(),
         "3층": tuple(),
+    },
+    section_sides_by_floor={
+        "1층": {},
+        "2층": {},
+        "3층": {},
     },
 )
 
@@ -142,10 +175,42 @@ def list_supported_theaters() -> list[str]:
     return [layout.canonical_name for layout in SEAT_LAYOUTS]
 
 
+def get_section_side(
+    theater_name: str | None,
+    floor: str | None,
+    section: str | None,
+) -> str | None:
+    if not theater_name or not section:
+        return None
+
+    try:
+        layout = _find_layout(theater_name)
+    except Exception:
+        return None
+
+    normalized_section = _normalize_section(section)
+    floor_candidates = [floor] if floor else list(layout.floors)
+
+    for floor_name in floor_candidates:
+        if not floor_name:
+            continue
+        side = layout.section_sides_by_floor.get(floor_name, {}).get(normalized_section)
+        if side:
+            return side
+
+    for sides_by_section in layout.section_sides_by_floor.values():
+        side = sides_by_section.get(normalized_section)
+        if side:
+            return side
+
+    return None
+
+
+# 극장 좌석 배치 메타데이터 반환
 def get_seat_layout(theater_name: str, simulate_failure: bool = False) -> SeatLayoutResponse:
-    normalized_name = _normalize(theater_name)
+    normalized_name = _normalize(theater_name)  # 극장명 정규화
     cache_key = f"{normalized_name}:failure={simulate_failure}"
-    cached = cache.get(cache_key)
+    cached = cache.get(cache_key)  # 캐시 확인
     if cached:
         return cached
 
@@ -153,8 +218,8 @@ def get_seat_layout(theater_name: str, simulate_failure: bool = False) -> SeatLa
         if simulate_failure:
             raise RuntimeError("simulated external metadata failure")
 
-        layout = _find_layout(theater_name)
-        response = _to_response(
+        layout = _find_layout(theater_name)  # 극장명 찾기
+        response = _to_response(  # 찾으면 API 응답 형태 만듦
             requested_name=theater_name,
             layout=layout,
             status="ok",
@@ -170,7 +235,7 @@ def get_seat_layout(theater_name: str, simulate_failure: bool = False) -> SeatLa
             is_fallback=True,
         )
 
-    return cache.set(cache_key, response)
+    return cache.set(cache_key, response)  # 캐시에 저장하고 반환
 
 
 def refresh_cache() -> int:
@@ -184,6 +249,10 @@ def _find_layout(theater_name: str) -> SeatLayoutDefinition:
         if normalized_name == _normalize(layout.canonical_name):
             return layout
 
+        if any(normalized_name == _normalize(alias) for alias in layout.aliases):
+            return layout
+
+    for layout in SEAT_LAYOUTS:
         if any(normalized_name in _normalize(alias) or _normalize(alias) in normalized_name for alias in layout.aliases):
             return layout
 
@@ -202,6 +271,10 @@ def _to_response(
         floor: [_option(section, f"{section}구역") for section in layout.sections_by_floor.get(floor, tuple())]
         for floor in layout.floors
     }
+    section_sides_by_floor = {
+        floor: layout.section_sides_by_floor.get(floor, {})
+        for floor in layout.floors
+    }
     ai_blocks_by_floor = {floor: _ai_blocks() for floor in layout.floors}
 
     return SeatLayoutResponse(
@@ -214,6 +287,7 @@ def _to_response(
         updatedAt=datetime.now(timezone.utc).isoformat(),
         floors=floors,
         sectionsByFloor=sections_by_floor,
+        sectionSidesByFloor=section_sides_by_floor,
         aiBlocksByFloor=ai_blocks_by_floor,
         seatMapUrl=layout.seat_map_url,
         metadata=SeatLayoutMetadata(
@@ -238,3 +312,7 @@ def _option(value: str, label: str) -> SeatOption:
 
 def _normalize(value: str) -> str:
     return "".join(value.lower().split())
+
+
+def _normalize_section(value: str) -> str:
+    return value.strip().upper()

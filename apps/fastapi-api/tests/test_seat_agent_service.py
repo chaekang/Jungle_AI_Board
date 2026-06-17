@@ -756,6 +756,273 @@ class FocusRoleRecommendationFakeNestClient(FakeNestClient):
         return {"answer": "E구역 중앙블록 위주로 보는 편이 좋습니다."}
 
 
+class AisleOffsetFakeNestClient(FakeNestClient):
+    def get_json(self, path, params=None):
+        if path == "/theaters":
+            return [{"id": "1", "name": "블루스퀘어 신한카드홀"}]
+
+        if path == "/musicals":
+            return [{"id": "1", "title": "웃는남자"}]
+
+        if path == "/seat-reviews/search":
+            row = params.get("seatRow") if params else None
+
+            if row == "2":
+                return {"items": [], "hasNext": False}
+
+            return {
+                "items": [
+                    {
+                        "id": "901",
+                        "theater": {"name": "블루스퀘어 신한카드홀"},
+                        "musical": {"title": "웃는남자"},
+                        "performance": {"seasonLabel": "2025"},
+                        "seat": {
+                            "floor": "1층",
+                            "section": "A",
+                            "row": "1",
+                            "number": "2",
+                        },
+                        "ratings": {
+                            "view": 4,
+                            "sound": 4,
+                            "comfort": 4,
+                            "expression": 5,
+                            "stageVisibility": 4,
+                        },
+                        "tags": [{"name": "사블통-1"}],
+                        "content": "1열 사블통-1은 통로에서 한 칸 들어간 자리라 표정은 가깝지만 각도는 조금 있습니다.",
+                    },
+                    {
+                        "id": "902",
+                        "theater": {"name": "블루스퀘어 신한카드홀"},
+                        "musical": {"title": "웃는남자"},
+                        "performance": {"seasonLabel": "2025"},
+                        "seat": {
+                            "floor": "1층",
+                            "section": "A",
+                            "row": "3",
+                            "number": "2",
+                        },
+                        "ratings": {
+                            "view": 4,
+                            "sound": 4,
+                            "comfort": 4,
+                            "expression": 4,
+                            "stageVisibility": 4,
+                        },
+                        "tags": [{"name": "사블통-1"}],
+                        "content": "3열 사블통-1도 사이드 각도는 있지만 통로석보다는 안쪽이라 무대 하단이 낫습니다.",
+                    },
+                    {
+                        "id": "903",
+                        "theater": {"name": "블루스퀘어 신한카드홀"},
+                        "musical": {"title": "웃는남자"},
+                        "performance": {"seasonLabel": "2025"},
+                        "seat": {
+                            "floor": "1층",
+                            "section": "A",
+                            "row": "2",
+                            "number": "1",
+                        },
+                        "ratings": {
+                            "view": 5,
+                            "sound": 4,
+                            "comfort": 3,
+                            "expression": 5,
+                            "stageVisibility": 3,
+                        },
+                        "tags": [{"name": "통로석"}],
+                        "content": "2열 사블 통로석은 배우는 가깝지만 완전 통로라 각도가 큽니다.",
+                    },
+                    {
+                        "id": "904",
+                        "theater": {"name": "블루스퀘어 신한카드홀"},
+                        "musical": {"title": "웃는남자"},
+                        "performance": {"seasonLabel": "2025"},
+                        "seat": {
+                            "floor": "1층",
+                            "section": "A",
+                            "row": "1",
+                            "number": "3",
+                        },
+                        "ratings": {
+                            "view": 5,
+                            "sound": 4,
+                            "comfort": 4,
+                            "expression": 5,
+                            "stageVisibility": 4,
+                        },
+                        "tags": [{"name": "사블통-2"}],
+                        "content": "1열 사블통-2는 통로에서 두 칸 들어간 자리라 사블통-1보다 안쪽입니다.",
+                    },
+                ],
+                "hasNext": False,
+            }
+
+        return []
+
+    def post_json(self, path, body):
+        return {"answer": "좌석 후기만 참고합니다."}
+
+
+class CenterCoreFakeNestClient(FakeNestClient):
+    def get_json(self, path, params=None):
+        if path == "/theaters":
+            return [{"id": "1", "name": "블루스퀘어 신한카드홀"}]
+
+        if path == "/musicals":
+            return [{"id": "1", "title": "웃는남자"}]
+
+        if path == "/seat-reviews/search":
+            numbers = [1, 2, 5, 6, 7, 8, 9, 10, 13]
+            return {
+                "items": [
+                    {
+                        "id": str(number),
+                        "theater": {"name": "블루스퀘어 신한카드홀"},
+                        "musical": {"title": "웃는남자"},
+                        "performance": {"seasonLabel": "2025"},
+                        "seat": {
+                            "floor": "1층",
+                            "section": "B",
+                            "row": "8",
+                            "number": str(number),
+                        },
+                        "ratings": {
+                            "view": 5,
+                            "sound": 4,
+                            "comfort": 4,
+                            "expression": 4,
+                            "stageVisibility": 5,
+                        },
+                        "tags": [{"name": "중앙블록"}],
+                        "content": f"8열 B구역 {number}번 후기입니다.",
+                    }
+                    for number in numbers
+                ],
+                "hasNext": False,
+            }
+
+        return []
+
+    def post_json(self, path, body):
+        return {"answer": "중앙 좌석 후기만 참고했습니다."}
+
+
+class DistanceRiskFakeNestClient(FakeNestClient):
+    def get_json(self, path, params=None):
+        if path == "/theaters":
+            return [{"id": "1", "name": "블루스퀘어 신한카드홀"}]
+
+        if path == "/musicals":
+            return [{"id": "1", "title": "웃는남자"}]
+
+        if path == "/seat-reviews/search":
+            return {
+                "items": [
+                    {
+                        "id": "far",
+                        "theater": {"name": "블루스퀘어 신한카드홀"},
+                        "musical": {"title": "웃는남자"},
+                        "performance": {"seasonLabel": "2025"},
+                        "seat": {
+                            "floor": "3층",
+                            "section": "B",
+                            "row": "9",
+                            "number": "15",
+                        },
+                        "ratings": {
+                            "view": 5,
+                            "sound": 4,
+                            "comfort": 4,
+                            "expression": 5,
+                            "stageVisibility": 5,
+                        },
+                        "tags": [{"name": "하느님석"}],
+                        "content": "창조주 시점이라 전체 무대는 들어오지만 배우 표정은 거의 안 보였습니다.",
+                    },
+                    {
+                        "id": "near",
+                        "theater": {"name": "블루스퀘어 신한카드홀"},
+                        "musical": {"title": "웃는남자"},
+                        "performance": {"seasonLabel": "2025"},
+                        "seat": {
+                            "floor": "1층",
+                            "section": "B",
+                            "row": "8",
+                            "number": "9",
+                        },
+                        "ratings": {
+                            "view": 4,
+                            "sound": 4,
+                            "comfort": 4,
+                            "expression": 4,
+                            "stageVisibility": 4,
+                        },
+                        "tags": [{"name": "표정잘보임"}],
+                        "content": "배우 표정 보기에는 무난하고 오글 없이도 디테일을 따라가기 좋았습니다.",
+                    },
+                ],
+                "hasNext": False,
+            }
+
+        return []
+
+    def post_json(self, path, body):
+        return {"answer": "거리 리스크 테스트에서는 RAG를 쓰지 않습니다."}
+
+
+class ExternalMusicalLookupFakeNestClient:
+    def __init__(self):
+        self.search_params = []
+
+    def get_json(self, path, params=None):
+        if path == "/theaters":
+            return [{"id": "1", "name": "디큐브 링크아트센터"}]
+
+        if path == "/musicals":
+            return []
+
+        if path == "/seat-reviews/search":
+            self.search_params.append(params or {})
+            if (params or {}).get("theater") != "디큐브 링크아트센터":
+                return {"items": []}
+            if (params or {}).get("musical"):
+                return {"items": []}
+
+            return {
+                "items": [
+                    {
+                        "id": "external-1",
+                        "theater": {"name": "디큐브 링크아트센터"},
+                        "musical": {"title": "팬텀"},
+                        "performance": {"seasonLabel": "2025"},
+                        "seat": {
+                            "floor": "2층",
+                            "section": "B",
+                            "row": "5",
+                            "number": "12",
+                        },
+                        "ratings": {
+                            "view": 5,
+                            "sound": 4,
+                            "comfort": 4,
+                            "expression": 4,
+                            "stageVisibility": 5,
+                        },
+                        "tags": [{"name": "시야좋음"}],
+                        "content": "중앙이라 무대 전체가 안정적으로 보이고 음향도 무난했습니다.",
+                    }
+                ]
+            }
+
+        return []
+
+    def post_json(self, path, body):
+        return {"answer": "RAG 답변은 이 테스트에서 최종 답변으로 쓰이면 안 됩니다."}
+
+
 class SeatAgentServiceTest(unittest.TestCase):
     @patch("app.services.seat_agent_service.NestClient", return_value=FakeNestClient())
     def test_recommends_with_evidence_and_mcp_status(self, _):
@@ -1013,7 +1280,7 @@ class SeatAgentServiceTest(unittest.TestCase):
         self.assertIn("왼블", result.recommendation)
         self.assertIn("우블", result.recommendation)
         self.assertNotEqual(result.recommendation, "D구역 왼쪽블록 위주로 보는 편이 좋습니다.")
-        self.assertEqual(result.direction, "왼쪽블록")
+        self.assertEqual(result.direction, "오른쪽블록")
 
     @patch(
         "app.services.seat_agent_service.NestClient",
@@ -1062,6 +1329,93 @@ class SeatAgentServiceTest(unittest.TestCase):
         self.assertIn("피하는", result.recommendation)
         self.assertNotEqual(result.recommendation, "E구역 중앙블록 위주로 보는 편이 좋습니다.")
         self.assertEqual(result.direction, "왼쪽블록")
+
+    @patch(
+        "app.services.seat_agent_service.NestClient",
+        return_value=AisleOffsetFakeNestClient(),
+    )
+    def test_aisle_offset_fallback_uses_same_offset_front_and_back_rows(self, _):
+        result = recommend_seat(
+            SeatRecommendationRequest(
+                question="웃는남자 2열 사블통-1 시야 어때?",
+                theaterName="블루스퀘어 신한카드홀",
+                musicalTitle="웃는남자",
+                useRag=False,
+                limit=5,
+            )
+        )
+
+        evidence_ids = {review.id for review in result.evidence_reviews}
+
+        self.assertEqual(result.filters.seat_row, "2")
+        self.assertEqual(result.filters.aisle_block, "side")
+        self.assertEqual(result.filters.aisle_offset, 1)
+        self.assertEqual(result.filters.side, "side")
+        self.assertEqual(evidence_ids, {"901", "902"})
+
+    @patch(
+        "app.services.seat_agent_service.NestClient",
+        return_value=CenterCoreFakeNestClient(),
+    )
+    def test_center_core_filters_to_middle_seat_numbers(self, _):
+        result = recommend_seat(
+            SeatRecommendationRequest(
+                question="웃는남자 1층 중중블 8열 시야 어때?",
+                theaterName="블루스퀘어 신한카드홀",
+                musicalTitle="웃는남자",
+                useRag=False,
+                limit=10,
+            )
+        )
+
+        evidence_numbers = {
+            review.seat.split()[-1].removesuffix("번")
+            for review in result.evidence_reviews
+        }
+
+        self.assertTrue(result.filters.center_core)
+        self.assertEqual(result.filters.side, "center")
+        self.assertEqual(evidence_numbers, {"5", "6", "7", "8", "9", "10"})
+
+    @patch(
+        "app.services.seat_agent_service.NestClient",
+        return_value=DistanceRiskFakeNestClient(),
+    )
+    def test_distance_risk_words_are_bad_for_expression_priority(self, _):
+        result = recommend_seat(
+            SeatRecommendationRequest(
+                question="웃는남자 배우 표정 잘 보이는 자리 추천해줘",
+                theaterName="블루스퀘어 신한카드홀",
+                musicalTitle="웃는남자",
+                useRag=False,
+                limit=1,
+            )
+        )
+
+        self.assertEqual(result.evidence_reviews[0].id, "near")
+
+
+    def test_external_musical_lookup_uses_same_theater_reviews_with_notice(self):
+        client = ExternalMusicalLookupFakeNestClient()
+
+        with patch("app.services.seat_agent_service.NestClient", return_value=client):
+            result = recommend_seat(
+                SeatRecommendationRequest(
+                    question="시카고 2층 중앙 시야 어때?",
+                    useRag=True,
+                    limit=5,
+                )
+            )
+
+        self.assertEqual(result.filters.theater_name, "디큐브 링크아트센터")
+        self.assertEqual(result.filters.musical_title, "시카고")
+        self.assertTrue(client.search_params)
+        self.assertTrue(all(params.get("musical") is None for params in client.search_params))
+        self.assertTrue(result.recommendation.startswith("시카고에 대한 좌석 후기는 아직 없어"))
+        self.assertIn("현재 공연 중인 디큐브 링크아트센터", result.recommendation)
+        self.assertIn("같은 극장의 다른 뮤지컬 후기를 참고해서", result.recommendation)
+        self.assertNotIn("RAG 답변", result.recommendation)
+        self.assertEqual([review.musical_title for review in result.evidence_reviews], ["팬텀"])
 
 
 if __name__ == "__main__":

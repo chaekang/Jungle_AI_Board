@@ -1,6 +1,10 @@
 import unittest
 
-from app.services.seat_metadata_service import get_seat_layout, refresh_cache
+from app.services.seat_metadata_service import (
+    get_seat_layout,
+    get_section_side,
+    refresh_cache,
+)
 
 
 class SeatMetadataServiceTest(unittest.TestCase):
@@ -14,6 +18,11 @@ class SeatMetadataServiceTest(unittest.TestCase):
         self.assertEqual(layout.canonical_theater_name, "블루스퀘어 신한카드홀")
         self.assertIn("2층", layout.sections_by_floor)
         self.assertEqual(len(layout.sections_by_floor["2층"]), 3)
+        self.assertEqual(layout.section_sides_by_floor["2층"]["B"], "center")
+
+    def test_returns_theater_specific_section_side(self):
+        self.assertEqual(get_section_side("TOM 1관", "1층", "D"), "right")
+        self.assertEqual(get_section_side("세종문화회관 대극장", "1층", "D"), "left")
 
     def test_returns_fallback_layout_when_external_lookup_fails(self):
         layout = get_seat_layout("블루스퀘어 신한카드홀", simulate_failure=True)

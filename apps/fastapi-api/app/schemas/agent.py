@@ -33,7 +33,13 @@ class AgentFilters(BaseModel):
     seat_section: str | None = Field(default=None, alias="seatSection")
     seat_row: str | None = Field(default=None, alias="seatRow")
     seat_number: str | None = Field(default=None, alias="seatNumber")
-    side: Literal["left", "center", "right"] | None = None
+    side: Literal["left", "center", "right", "side"] | None = None
+    center_core: bool = Field(default=False, alias="centerCore")
+    aisle_block: Literal["left", "center", "right", "side"] | None = Field(
+        default=None,
+        alias="aisleBlock",
+    )
+    aisle_offset: int | None = Field(default=None, alias="aisleOffset")
     priorities: list[Priority]
     budget: int | None = None
 

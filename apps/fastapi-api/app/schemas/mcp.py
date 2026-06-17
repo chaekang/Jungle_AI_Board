@@ -1,3 +1,5 @@
+from datetime import date
+
 from pydantic import BaseModel, Field
 
 
@@ -24,6 +26,7 @@ class SeatLayoutResponse(BaseModel):
     updated_at: str = Field(alias="updatedAt")
     floors: list[SeatOption]
     sections_by_floor: dict[str, list[SeatOption]] = Field(alias="sectionsByFloor")
+    section_sides_by_floor: dict[str, dict[str, str]] = Field(alias="sectionSidesByFloor")
     ai_blocks_by_floor: dict[str, list[SeatOption]] = Field(alias="aiBlocksByFloor")
     seat_map_url: str | None = Field(default=None, alias="seatMapUrl")
     metadata: SeatLayoutMetadata
@@ -34,5 +37,17 @@ class SeatLayoutResponse(BaseModel):
 class CacheRefreshResponse(BaseModel):
     refreshed: bool
     cleared_keys: int = Field(alias="clearedKeys")
+
+    model_config = {"populate_by_name": True}
+
+
+class ExternalMusicalProductionResponse(BaseModel):
+    musical_title: str = Field(alias="musicalTitle")
+    theater_name: str = Field(alias="theaterName")
+    started_on: date = Field(alias="startedOn")
+    ended_on: date | None = Field(default=None, alias="endedOn")
+    selection_status: str = Field(alias="selectionStatus")
+    source: str
+    source_url: str | None = Field(default=None, alias="sourceUrl")
 
     model_config = {"populate_by_name": True}

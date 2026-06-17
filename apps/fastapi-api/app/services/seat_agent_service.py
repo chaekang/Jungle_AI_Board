@@ -10,8 +10,16 @@ from app.schemas.agent import (
     SeatRecommendationRequest,
     SeatRecommendationResponse,
 )
+from app.services.external_musical_metadata_service import (
+    ExternalMusicalProduction,
+    lookup_external_musical_production,
+)
 from app.services.nest_client import NestClient, NestClientError
-from app.services.seat_metadata_service import get_seat_layout, list_supported_theaters
+from app.services.seat_metadata_service import (
+    get_seat_layout,
+    get_section_side,
+    list_supported_theaters,
+)
 
 
 PRIORITY_KEYWORDS = {
@@ -35,6 +43,8 @@ RATING_KEYS = {
     "expression": "expression",
     "stageVisibility": "stageVisibility",
 }
+CENTER_CORE_SEAT_COUNT = 6
+DISTANCE_RISK_KEYWORDS = ("하느님석", "하느님", "하나님석", "하나님", "창조주석", "창조주")
 THEATER_ALIASES = {
     "세종": "세종문화회관 대극장",
     "세종대극장": "세종문화회관 대극장",
@@ -94,6 +104,7 @@ class SeatCandidate:
     section: str | None
     row: str | None
     side: str | None
+    center_core: bool = False
 
 
 @dataclass
@@ -109,6 +120,20 @@ class CandidateEvaluation:
 def recommend_seat(request: SeatRecommendationRequest) -> SeatRecommendationResponse:
     client = NestClient()
     filters = _extract_filters(request, client)
+    external_production = _resolve_external_musical_production(request, filters)
+    if external_production and not filters.theater_name:
+        filters = filters.model_copy(
+            update={
+                "theater_name": external_production.theater_name,
+                "musical_title": external_production.musical_title,
+            }
+        )
+
+    review_filters = (
+        filters.model_copy(update={"musical_title": None})
+        if external_production
+        else filters
+    )
     intent = _detect_intent(request.question)
     focus_subject = _extract_focus_subject(request.question)
     mcp_status = "not_requested"
@@ -130,10 +155,10 @@ def recommend_seat(request: SeatRecommendationRequest) -> SeatRecommendationResp
             seat_candidates,
         )
 
-    search_scope = _load_review_scope(client, filters, request.limit, intent)
+    search_scope = _load_review_scope(client, review_filters, request.limit, intent)  # 근거 리뷰 범위 불러오기
     reviews = search_scope.reviews
 
-    if request.use_rag:
+    if request.use_rag and not external_production:
         try:
             rag = client.post_json(
                 "/rag/questions",
@@ -145,20 +170,29 @@ def recommend_seat(request: SeatRecommendationRequest) -> SeatRecommendationResp
             rag_status = "fallback"
 
     scored = sorted(
-        (_score_review(review, filters, focus_subject) for review in reviews),
+        (_score_review(review, review_filters, focus_subject) for review in reviews),  # 리뷰를 점수화
         key=lambda item: item.score,
         reverse=True,
     )
-    evidence = [_to_evidence(item.review) for item in scored[: request.limit]]
+    evidence = [_to_evidence(item.review) for item in scored[: request.limit]]  # 응답용 근거 현태로 바꿈
     best = scored[0].review if scored else None
-    official_section = _select_official_section(reviews, best)
-    descriptive_block = _select_descriptive_block(filters, official_section, best)
+    official_section = _select_official_section(reviews, best)  # 공식 구역을 고름
+    descriptive_block = _select_descriptive_block(review_filters, official_section, best)  # 왼쪽/중앙/오른쪽/사이드 설명 블록을 고름
 
-    reasons = _build_reasons(filters, evidence, official_section, descriptive_block, rag_answer)
+    reasons = _build_reasons(review_filters, evidence, official_section, descriptive_block, rag_answer)
+    if external_production:
+        reasons.insert(
+            0,
+            (
+                f"{external_production.musical_title}은 외부 공연 메타데이터로 "
+                f"{_external_production_basis_label(external_production)} "
+                f"{external_production.theater_name} 공연장 정보를 확인했습니다."
+            ),
+        )
     cautions = _build_cautions(evidence, official_section)
     local_answer = _build_answer(
         intent,
-        filters,
+        review_filters,
         evidence,
         official_section,
         descriptive_block,
@@ -170,6 +204,8 @@ def recommend_seat(request: SeatRecommendationRequest) -> SeatRecommendationResp
         if intent in {"obstruction_range", "op_assessment"} or focus_subject
         else rag_answer or local_answer
     )
+    if external_production:
+        recommendation = _prepend_external_musical_notice(recommendation, external_production)
 
     return SeatRecommendationResponse(
         recommendation=recommendation,
@@ -186,10 +222,52 @@ def recommend_seat(request: SeatRecommendationRequest) -> SeatRecommendationResp
     )
 
 
+def _resolve_external_musical_production(
+    request: SeatRecommendationRequest,
+    filters: AgentFilters,
+) -> ExternalMusicalProduction | None:
+    if filters.musical_title and filters.theater_name:
+        return None
+
+    return lookup_external_musical_production(
+        filters.musical_title or request.musical_title or request.question
+    )
+
+
+def _prepend_external_musical_notice(
+    answer: str,
+    production: ExternalMusicalProduction,
+) -> str:
+    basis = _external_production_notice_label(production)
+    return (
+        f"{production.musical_title}에 대한 좌석 후기는 아직 없어, "
+        f"{basis} {production.theater_name}의 같은 극장의 다른 뮤지컬 후기를 "
+        f"참고해서 말할게요. {answer}"
+    )
+
+
+def _external_production_notice_label(production: ExternalMusicalProduction) -> str:
+    if production.selection_status == "current":
+        return "현재 공연 중인"
+    if production.selection_status == "most_recent":
+        return "현재 공연 중인 공연장을 찾지 못해 가장 최근 공연장인"
+    return "외부 공연 정보로 확인한"
+
+
+def _external_production_basis_label(production: ExternalMusicalProduction) -> str:
+    if production.selection_status == "current":
+        return "현재 공연 중인"
+    if production.selection_status == "most_recent":
+        return "가장 최근 공연장인"
+    return "외부 공연 정보로 확인한"
+
+
 def _extract_filters(request: SeatRecommendationRequest, client: NestClient) -> AgentFilters:
     question = request.question
     theaters = _safe_get(client, "/theaters")
     musicals = _safe_get(client, "/musicals")
+    aisle_reference = _extract_aisle_reference(question)
+    center_core = _has_center_core_reference(question)
 
     theater_name = request.theater_name or _find_name(question, theaters, "name")
     musical_title = request.musical_title or _find_name(question, musicals, "title")
@@ -219,7 +297,10 @@ def _extract_filters(request: SeatRecommendationRequest, client: NestClient) -> 
         seatSection=_extract_regex(question, r"([A-Z가-힣0-9]+)\s*(구역|블록|블럭)", lambda match: match.group(1).upper()),
         seatRow=seat_row,
         seatNumber=_extract_regex(question, r"(\d+)\s*(번|number)", lambda match: match.group(1)),
-        side=_extract_side(question),
+        side="center" if center_core else _extract_side(question) or (aisle_reference[0] if aisle_reference else None),
+        centerCore=center_core,
+        aisleBlock=aisle_reference[0] if aisle_reference else None,
+        aisleOffset=aisle_reference[1] if aisle_reference else None,
         priorities=priorities,
         budget=request.budget or _extract_budget(question),
     )
@@ -229,7 +310,7 @@ def _extract_seat_candidates(question: str) -> list[SeatCandidate]:
     candidates: list[SeatCandidate] = []
     pattern = re.compile(
         r"(?P<floor>\d+)\s*(?P<floor_unit>층|F)\s*"
-        r"(?P<block>좌블|중블|우블|좌측|중앙|오른쪽|왼쪽|[A-Z]\s*(?:구역|블록|블럭))\s*"
+        r"(?P<block>좌블|중중블|중블|우블|좌측|중앙|오른쪽|왼쪽|[A-Z]\s*(?:구역|블록|블럭))\s*"
         r"(?P<row>\d+)\s*열",
         flags=re.IGNORECASE,
     )
@@ -247,12 +328,13 @@ def _extract_seat_candidates(question: str) -> list[SeatCandidate]:
                 section=section,
                 row=row,
                 side=side,
+                center_core=_candidate_is_center_core(block),
             )
         )
 
     row_block_pattern = re.compile(
         r"(?P<row>\d+)\s*열\s*"
-        r"(?P<block>사이드\s*블록\s*통로석|사이드\s*블록|사이드\s*통로|극\s*사이드|완전\s*사이드|극싸|사블통|사블|좌블통|중블통|우블통|좌블|중블|우블|좌측|중앙|오른쪽|왼쪽|[A-Z]\s*(?:구역|블록|블럭))",
+        r"(?P<block>사이드\s*블록\s*통로석|사이드\s*블록|사이드\s*통로|극\s*사이드|완전\s*사이드|극싸|사블통|사블|좌블통|중블통|우블통|좌블|중중블|중블|우블|좌측|중앙|오른쪽|왼쪽|[A-Z]\s*(?:구역|블록|블럭))",
         flags=re.IGNORECASE,
     )
 
@@ -268,6 +350,7 @@ def _extract_seat_candidates(question: str) -> list[SeatCandidate]:
                 section=section,
                 row=row,
                 side=side,
+                center_core=_candidate_is_center_core(block),
             )
         )
 
@@ -313,11 +396,15 @@ def _extract_side_only_candidates(question: str) -> list[SeatCandidate]:
         return []
 
     candidates: list[SeatCandidate] = []
-    for label, side in (
-        ("왼블", "left"),
-        ("중블", "center"),
-        ("우블", "right"),
+    has_center_core = _has_center_core_reference(question)
+    for label, side, center_core in (
+        ("왼블", "left", False),
+        ("중중블", "center", True),
+        ("중블", "center", False),
+        ("우블", "right", False),
     ):
+        if label == "중블" and has_center_core:
+            continue
         if _mentions_side_candidate(question, label, side):
             candidates.append(
                 SeatCandidate(
@@ -326,6 +413,7 @@ def _extract_side_only_candidates(question: str) -> list[SeatCandidate]:
                     section=None,
                     row=None,
                     side=side,
+                    center_core=center_core,
                 )
             )
 
@@ -334,6 +422,41 @@ def _extract_side_only_candidates(question: str) -> list[SeatCandidate]:
 
 def _asks_side_comparison(question: str) -> bool:
     return any(keyword in question for keyword in ("나아", "나을까", "골라", "중에서", "vs", "VS"))
+
+
+def _has_center_core_reference(question: str) -> bool:
+    return any(keyword in question for keyword in ("중중블", "중앙중블", "중블중앙"))
+
+
+def _extract_aisle_reference(question: str) -> tuple[str, int] | None:
+    match = re.search(
+        r"(?:(사이드\s*블록|사이드\s*통로|사블통|좌블통|중블통|우블통)\s*-?\s*(\d+)|"
+        r"(사블|좌블|중블|우블|왼블|오블)\s*-\s*(\d+))",
+        question,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None
+
+    block_text = match.group(1) or match.group(3)
+    offset_text = match.group(2) or match.group(4)
+    block = _aisle_block_from_label(re.sub(r"\s+", "", block_text))
+    offset = _parse_int(offset_text)
+    if block is None or offset is None:
+        return None
+    return block, offset
+
+
+def _aisle_block_from_label(label: str) -> str | None:
+    if label in {"사블", "사블통", "사이드블록", "사이드통로"}:
+        return "side"
+    if label in {"좌블", "좌블통", "왼블"}:
+        return "left"
+    if label in {"중블", "중블통"}:
+        return "center"
+    if label in {"우블", "우블통", "오블"}:
+        return "right"
+    return None
 
 
 def _mentions_side_candidate(question: str, label: str, side: str) -> bool:
@@ -354,7 +477,7 @@ def _candidate_section(block: str) -> str | None:
 def _candidate_side(block: str) -> str | None:
     if block in {"좌블", "좌블통", "좌측", "왼쪽"}:
         return "left"
-    if block in {"중블", "중블통", "중앙"}:
+    if block in {"중중블", "중블", "중블통", "중앙"}:
         return "center"
     if block in {"우블", "우블통", "오른쪽"}:
         return "right"
@@ -366,6 +489,8 @@ def _candidate_side(block: str) -> str | None:
 def _candidate_block_label(block: str) -> str:
     if block in {"좌블", "좌블통"}:
         return "좌블"
+    if block == "중중블":
+        return "중중블"
     if block in {"중블", "중블통"}:
         return "중블"
     if block in {"우블", "우블통"}:
@@ -378,6 +503,10 @@ def _candidate_block_label(block: str) -> str:
     if section:
         return f"{section}구역"
     return block
+
+
+def _candidate_is_center_core(block: str) -> bool:
+    return block in {"중중블", "중앙중블", "중블중앙"}
 
 
 def _compare_seat_candidates(
@@ -444,6 +573,7 @@ def _evaluate_seat_candidate(
             "seat_row": candidate.row,
             "seat_number": None,
             "side": candidate.side or base_filters.side,
+            "center_core": candidate.center_core or base_filters.center_core,
         }
     )
     search_scope = _load_review_scope(client, candidate_filters, request.limit, intent)
@@ -738,6 +868,12 @@ def _load_review_scope(
         )
 
     exact_reviews = _search_reviews(client, filters, limit)
+    if filters.center_core:
+        center_core_reviews = _filter_center_core_reviews(exact_reviews, filters)
+        if center_core_reviews:
+            exact_reviews = center_core_reviews
+    if filters.aisle_offset is not None:
+        exact_reviews = _filter_aisle_offset_reviews(exact_reviews, filters)
 
     if len(exact_reviews) >= min(3, limit) or not filters.seat_row:
         return ReviewSearchScope(reviews=exact_reviews, label="exact", exact_count=len(exact_reviews))
@@ -746,6 +882,26 @@ def _load_review_scope(
     broad_reviews = _search_reviews(client, broad_filters, 50)
 
     if not broad_reviews:
+        return ReviewSearchScope(
+            reviews=exact_reviews,
+            label="exact",
+            exact_count=len(exact_reviews),
+        )
+
+    if filters.center_core:
+        center_core_reviews = _filter_center_core_reviews(broad_reviews, filters)
+        if center_core_reviews:
+            broad_reviews = center_core_reviews
+
+    if filters.aisle_offset is not None:
+        nearby_aisle_reviews = _nearby_aisle_offset_reviews(broad_reviews, filters)
+        if nearby_aisle_reviews:
+            return ReviewSearchScope(
+                reviews=nearby_aisle_reviews[: max(limit, 10)],
+                label="nearby_aisle_offset",
+                exact_count=len(exact_reviews),
+            )
+
         return ReviewSearchScope(
             reviews=exact_reviews,
             label="exact",
@@ -816,6 +972,117 @@ def _nearby_row_reviews(reviews: list[dict], target_row: str) -> list[dict]:
     return nearby
 
 
+def _filter_center_core_reviews(reviews: list[dict], filters: AgentFilters) -> list[dict]:
+    if not filters.center_core:
+        return reviews
+
+    center_reviews = [
+        review
+        for review in reviews
+        if _review_side(review, filters) == "center"
+    ]
+    target_numbers = _center_core_numbers(center_reviews)
+    if not target_numbers:
+        return []
+
+    return [
+        review
+        for review in center_reviews
+        if _parse_int(review.get("seat", {}).get("number")) in target_numbers
+    ]
+
+
+def _center_core_numbers(reviews: list[dict]) -> set[int]:
+    numbers = [
+        number
+        for review in reviews
+        if (number := _parse_int(review.get("seat", {}).get("number"))) is not None
+    ]
+    if not numbers:
+        return set()
+
+    low = min(numbers)
+    high = max(numbers)
+    count = min(CENTER_CORE_SEAT_COUNT, high - low + 1)
+    middle = (low + high) // 2
+    start = middle - (count // 2) + 1
+    start = max(low, min(start, high - count + 1))
+    return set(range(start, start + count))
+
+
+def _nearby_aisle_offset_reviews(reviews: list[dict], filters: AgentFilters) -> list[dict]:
+    target_number = _parse_int(filters.seat_row)
+    if target_number is None:
+        return _filter_aisle_offset_reviews(reviews, filters)
+
+    return [
+        review
+        for review in _filter_aisle_offset_reviews(reviews, filters)
+        if (row_number := _parse_int(review.get("seat", {}).get("row"))) is not None
+        and abs(row_number - target_number) == 1
+    ]
+
+
+def _filter_aisle_offset_reviews(reviews: list[dict], filters: AgentFilters) -> list[dict]:
+    if filters.aisle_offset is None:
+        return reviews
+
+    return [
+        review
+        for review in reviews
+        if _review_matches_aisle_offset(review, filters.aisle_block or filters.side, filters.aisle_offset)
+    ]
+
+
+def _review_matches_aisle_offset(review: dict, aisle_block: str | None, aisle_offset: int) -> bool:
+    if aisle_block is None:
+        return False
+
+    tags = [tag.get("name", "") for tag in review.get("tags", [])]
+    content = str(review.get("content") or "")
+    tag_text = _compact(" ".join(tags))
+    searchable_text = _compact(" ".join([content, *tags]))
+    target_patterns = _aisle_offset_patterns(aisle_block, aisle_offset)
+
+    if _has_precise_aisle_offset(tag_text, aisle_block):
+        return any(pattern in tag_text for pattern in target_patterns)
+
+    return any(pattern in searchable_text for pattern in target_patterns)
+
+
+def _has_precise_aisle_offset(text: str, aisle_block: str) -> bool:
+    aliases = {
+        "side": ("사블", "사블통", "사이드블록", "사이드통로"),
+        "left": ("좌블", "좌블통", "왼블", "왼쪽"),
+        "center": ("중블", "중블통", "중앙"),
+        "right": ("우블", "우블통", "오블", "오른쪽"),
+    }.get(aisle_block, tuple())
+
+    return any(re.search(rf"{alias}(?:통)?-?\d+", text) for alias in aliases)
+
+
+def _aisle_offset_patterns(aisle_block: str, aisle_offset: int) -> list[str]:
+    aliases = {
+        "side": ("사블", "사블통", "사이드블록", "사이드통로"),
+        "left": ("좌블", "좌블통", "왼블", "왼쪽"),
+        "center": ("중블", "중블통", "중앙"),
+        "right": ("우블", "우블통", "오블", "오른쪽"),
+    }.get(aisle_block, tuple())
+
+    patterns: list[str] = []
+    for alias in aliases:
+        patterns.extend(
+            [
+                f"{alias}-{aisle_offset}",
+                f"{alias}{aisle_offset}",
+                f"{alias}에서{aisle_offset}칸",
+                f"{alias}기준{aisle_offset}칸",
+            ]
+        )
+
+    return [_compact(pattern) for pattern in patterns]
+
+
 def _score_review(
     review: dict,
     filters: AgentFilters,
@@ -831,6 +1098,12 @@ def _score_review(
     tags = [tag.get("name", "") for tag in review.get("tags", [])]
     content = str(review.get("content") or "")
     searchable_text = _compact(" ".join([content, *tags]))
+    has_distance_risk = _has_distance_risk_text(content, tags)
+
+    if has_distance_risk:
+        score -= 3
+        if "expression" in filters.priorities or focus_subject:
+            score -= 4
 
     if focus_subject:
         compact_focus = _compact(focus_subject)
@@ -844,7 +1117,7 @@ def _score_review(
     if "lowObstruction" in filters.priorities and any("시야방해" in tag or "사이드" in tag for tag in tags):
         score -= 4
     if filters.side:
-        review_side = _section_to_side(review.get("seat", {}).get("section"))
+        review_side = _review_side(review, filters)
         if filters.side == "side" and review_side in {"left", "right"}:
             score += 2
         elif review_side == filters.side:
@@ -889,8 +1162,31 @@ def _select_descriptive_block(filters: AgentFilters, official_section: str | Non
     if filters.side:
         return filters.side
     if best:
-        return _section_to_side(best.get("seat", {}).get("section"))
-    return _section_to_side(official_section)
+        seat = best.get("seat", {})
+        return _section_to_side_for(
+            filters.theater_name,
+            seat.get("floor") or filters.seat_floor,
+            seat.get("section"),
+        )
+    return _section_to_side_for(filters.theater_name, filters.seat_floor, official_section)
+
+
+def _review_side(review: dict, filters: AgentFilters) -> str | None:
+    seat = review.get("seat", {})
+    theater = (
+        review.get("theater", {}).get("name")
+        or review.get("theaterName")
+        or filters.theater_name
+    )
+    return _section_to_side_for(theater, seat.get("floor") or filters.seat_floor, seat.get("section"))
+
+
+def _section_to_side_for(
+    theater_name: str | None,
+    floor: str | None,
+    section: str | None,
+) -> str | None:
+    return get_section_side(theater_name, floor, section) or _section_to_side(section)
 
 
 def _section_to_side(section: str | None) -> str | None:
@@ -919,6 +1215,11 @@ def _has_obstruction_text(content: str, tags: list[str]) -> bool:
     return any("시야방해" in tag or "가림" in tag for tag in tags) or any(
         keyword in content for keyword in ("시야방해", "시야 방해", "가림", "난간", "스피커")
     )
+
+
+def _has_distance_risk_text(content: str, tags: list[str]) -> bool:
+    text = _compact(" ".join([content, *tags]))
+    return any(keyword in text for keyword in DISTANCE_RISK_KEYWORDS)
 
 
 def _evidence_section(review: EvidenceReview | None) -> str | None:

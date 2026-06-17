@@ -38,6 +38,7 @@ export default function SeatAssistantPanel() {
     }
   }, [isOpen, messages, isLoading])
 
+  // 질문 제출
   async function submitQuestion(question: string) {
     const trimmedQuestion = question.trim()
 
