@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Min,
   MinLength,
 } from 'class-validator';
@@ -11,6 +12,7 @@ import {
 export class AskRagQuestionDto {
   @IsString()
   @MinLength(2)
+  @MaxLength(500)
   question!: string;
 
   @IsOptional()
