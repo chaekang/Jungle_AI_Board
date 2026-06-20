@@ -46,6 +46,7 @@ pytest-cache-files-*/
 .env.test.local
 .env.production.local
 .env.local
+.env.aws
 docker-compose.override.yml
 
 # temp directory

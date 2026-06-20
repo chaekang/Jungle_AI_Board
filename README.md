@@ -57,3 +57,11 @@ Stop it with:
 ```powershell
 npm run db:down
 ```
+
+## AWS Deployment
+
+AWS-ready container examples and the production checklist live in
+`docs/deployment/aws.md`.
+
+Start from `.env.aws.example`, store real values in AWS Secrets Manager or SSM,
+and never commit `.env.aws`.
