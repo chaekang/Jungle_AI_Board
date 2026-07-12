@@ -2,17 +2,29 @@
   "name": "agentic-board",
   "private": true,
   "scripts": {
+    "install:all": "npm run nest:install && npm run web:install",
     "nest:install": "npm --prefix apps/nest-api install",
     "nest:start": "npm --prefix apps/nest-api run start:dev",
     "nest:build": "npm --prefix apps/nest-api run build",
     "nest:test": "npm --prefix apps/nest-api run test",
     "nest:test:e2e": "npm --prefix apps/nest-api run test:e2e",
+    "nest:migrate": "npm --prefix apps/nest-api exec prisma migrate deploy",
+    "nest:seed": "npm --prefix apps/nest-api run db:seed",
     "web:install": "npm --prefix apps/web-react install",
     "web:dev": "npm --prefix apps/web-react run dev",
     "web:build": "npm --prefix apps/web-react run build",
     "web:lint": "npm --prefix apps/web-react run lint",
-    "db:up": "docker compose up -d",
-    "db:down": "docker compose down",
-    "db:logs": "docker compose logs -f postgres"
+    "web:test": "npm --prefix apps/web-react run test",
+    "fastapi:test": "cd apps/fastapi-api && python -m pytest tests -p no:cacheprovider",
+    "test": "npm run nest:test -- --runInBand && npm run web:test && npm run fastapi:test",
+    "build": "npm run nest:build && npm run web:build",
+    "compose:build": "docker compose -f docker-compose.yml build",
+    "compose:up": "docker compose -f docker-compose.yml up -d --build",
+    "compose:down": "docker compose -f docker-compose.yml down",
+    "compose:logs": "docker compose -f docker-compose.yml logs -f",
+    "compose:ps": "docker compose -f docker-compose.yml ps",
+    "db:up": "docker compose -f docker-compose.yml up -d postgres",
+    "db:down": "docker compose -f docker-compose.yml down",
+    "db:logs": "docker compose -f docker-compose.yml logs -f postgres"
   }
 }

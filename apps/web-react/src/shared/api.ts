@@ -28,5 +28,9 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
 }
 
 export function createApiUrl(path: string) {
+  if (API_BASE_URL.startsWith("/")) {
+    return `${API_BASE_URL.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`
+  }
+
   return new URL(path, API_BASE_URL).toString()
 }

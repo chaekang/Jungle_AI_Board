@@ -1,16 +1,104 @@
+name: jungle-ai-board
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: agentic-postgres
+    container_name: jungle-ai-board-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: agentic_board
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-agentic_board}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nest-api:
+    build:
+      context: ./apps/nest-api
+    container_name: jungle-ai-board-nest-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-agentic_board}?schema=public}
+      JWT_SECRET: ${JWT_SECRET:-change-this-before-public-deploy-64-byte-secret}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
+      AUTH_REFRESH_TOKEN_TTL_DAYS: ${AUTH_REFRESH_TOKEN_TTL_DAYS:-14}
+      AUTH_ACCESS_COOKIE_MAX_AGE_MS: ${AUTH_ACCESS_COOKIE_MAX_AGE_MS:-900000}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      AUTH_COOKIE_SAME_SITE: ${AUTH_COOKIE_SAME_SITE:-lax}
+      AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      WEB_APP_ORIGIN: ${WEB_APP_ORIGIN:-http://localhost:8080}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI:-http://localhost:8080/api/auth/google/callback}
+      GOOGLE_OAUTH_STATE_SECRET: ${GOOGLE_OAUTH_STATE_SECRET:-change-this-before-public-deploy-oauth-state}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-gpt-4o-mini}
+      RAG_QUESTION_RATE_LIMIT_MAX_REQUESTS: ${RAG_QUESTION_RATE_LIMIT_MAX_REQUESTS:-20}
+      RAG_QUESTION_RATE_LIMIT_WINDOW_MS: ${RAG_QUESTION_RATE_LIMIT_WINDOW_MS:-60000}
+    command: sh -c "npx prisma migrate deploy && node dist/src/main.js"
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  fastapi-api:
+    build:
+      context: ./apps/fastapi-api
+    container_name: jungle-ai-board-fastapi-api
+    restart: unless-stopped
+    depends_on:
+      nest-api:
+        condition: service_healthy
+    environment:
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      NEST_API_BASE_URL: http://nest-api:3000
+      NEST_API_TIMEOUT_SECONDS: ${NEST_API_TIMEOUT_SECONDS:-8}
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  web-react:
+    build:
+      context: ./apps/web-react
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        VITE_AGENT_API_BASE_URL: ${VITE_AGENT_API_BASE_URL:-}
+    container_name: jungle-ai-board-web
+    restart: unless-stopped
+    depends_on:
+      nest-api:
+        condition: service_healthy
+      fastapi-api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres-data:
