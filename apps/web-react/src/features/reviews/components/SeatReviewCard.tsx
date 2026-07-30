@@ -1,3 +1,4 @@
+import { getSeatLabel } from "../../agent/seat-comparison"
 import type { PublicSeatReview } from "../types"
 
 type SeatReviewCardProps = {
@@ -7,6 +8,8 @@ type SeatReviewCardProps = {
   onEdit?: (review: PublicSeatReview) => void
   onDelete?: (review: PublicSeatReview) => void
   onReport?: (review: PublicSeatReview) => void
+  onToggleComparison?: (review: PublicSeatReview) => void
+  isInComparison?: boolean
   variant?: "default" | "detail"
   canManage?: boolean
 }
@@ -27,16 +30,6 @@ function getPerformanceTitle(review: PublicSeatReview) {
   return [review.performance?.seasonLabel, review.musical.title].filter(Boolean).join(" ")
 }
 
-function getSeatLabel(review: PublicSeatReview) {
-  return [
-    review.seat.floor,
-    review.seat.section ? `${review.seat.section} 구역` : "",
-    review.seat.row ? `${review.seat.row}열` : "",
-    review.seat.number ? `${review.seat.number}번` : "",
-  ]
-    .filter(Boolean)
-    .join(" ")
-}
 
 function formatCreatedAt(value: string) {
   return new Intl.DateTimeFormat("ko-KR", {
@@ -55,6 +48,8 @@ export default function SeatReviewCard({
   onEdit,
   onDelete,
   onReport,
+  onToggleComparison,
+  isInComparison = false,
   variant = "default",
   canManage = false,
 }: SeatReviewCardProps) {
@@ -110,11 +105,24 @@ export default function SeatReviewCard({
         <span>무대 {getRatingLabel(review.ratings.stageVisibility)}</span>
       </div>
 
-      {tags.length > 0 || onReport ? (
-        <div className="board-review-tags" aria-label="태그와 신고">
+      {tags.length > 0 || onReport || onToggleComparison ? (
+        <div className="board-review-tags" aria-label="태그와 후기 액션">
           {tags.map((tag) => (
             <span key={tag.id}>{tag.name}</span>
           ))}
+          {onToggleComparison ? (
+            <button
+              className="board-review-compare-button"
+              type="button"
+              aria-pressed={isInComparison}
+              onClick={(event) => {
+                event.stopPropagation()
+                onToggleComparison(review)
+              }}
+            >
+              {isInComparison ? "비교함에서 빼기" : "비교함에 담기"}
+            </button>
+          ) : null}
           {onReport ? (
             <button
               className="board-review-report-button"

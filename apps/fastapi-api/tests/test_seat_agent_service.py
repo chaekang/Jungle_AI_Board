@@ -2,8 +2,14 @@ import unittest
 import re
 from unittest.mock import patch
 
-from app.schemas.agent import SeatRecommendationRequest
-from app.services.seat_agent_service import recommend_seat
+from app.schemas.agent import AgentFilters, SeatRecommendationRequest
+from app.services.nest_client import NestClientError
+from app.services.seat_agent_service import (
+    _extract_seat_candidates,
+    _load_review_scope,
+    _safe_get,
+    recommend_seat,
+)
 
 
 class FakeNestClient:
@@ -1023,7 +1029,145 @@ class ExternalMusicalLookupFakeNestClient:
         return {"answer": "RAG 답변은 이 테스트에서 최종 답변으로 쓰이면 안 됩니다."}
 
 
+class EmptyComparisonFakeNestClient(FakeNestClient):
+    def get_json(self, path, params=None):
+        if path == "/theaters":
+            return [{"id": "50", "name": "세종문화회관 대극장"}]
+        if path == "/musicals":
+            return [{"id": "20", "title": "웃는 남자"}]
+        if path == "/seat-reviews/search":
+            return {"items": []}
+        return []
+
+    def post_json(self, path, body):
+        raise AssertionError("RAG should not be called for comparison")
+
+
+class SparseExactScopeFakeNestClient:
+    def get_json(self, path, params=None):
+        if path != "/seat-reviews/search":
+            return []
+        if params and params.get("seatNumber"):
+            return {
+                "items": [
+                    {
+                        "id": "exact-12",
+                        "seat": {
+                            "floor": "1층",
+                            "section": "B",
+                            "row": "8",
+                            "number": "12",
+                        },
+                    }
+                ]
+            }
+        return {
+            "items": [
+                {
+                    "id": "nearby-13",
+                    "seat": {
+                        "floor": "1층",
+                        "section": "B",
+                        "row": "9",
+                        "number": "13",
+                    },
+                }
+            ]
+        }
+
+
+class FailedComparisonFakeNestClient(EmptyComparisonFakeNestClient):
+    def get_json(self, path, params=None):
+        if path == "/seat-reviews/search":
+            raise NestClientError("review service unavailable")
+        return super().get_json(path, params)
+
+
 class SeatAgentServiceTest(unittest.TestCase):
+    def test_metadata_failure_keeps_safe_empty_list_fallback(self):
+        self.assertEqual(
+            _safe_get(FailedComparisonFakeNestClient(), "/seat-reviews/search"),
+            [],
+        )
+
+    def test_rejects_whitespace_and_case_duplicate_candidates(self):
+        with self.assertRaises(ValueError):
+            SeatRecommendationRequest(
+                question="좌석 비교해줘",
+                candidates=[
+                    {
+                        "floor": "1층",
+                        "section": "OP",
+                        "row": "1",
+                        "seatNumber": "8",
+                    },
+                    {
+                        "floor": " 1층 ",
+                        "section": " op ",
+                        "row": " 1 ",
+                        "seatNumber": " 8 ",
+                    },
+                ],
+            )
+
+    def test_rejects_partial_structured_candidate_lists(self):
+        with self.assertRaises(ValueError):
+            SeatRecommendationRequest(
+                question="좌석 비교해줘",
+                candidates=[
+                    {"floor": "1층", "row": "1", "seatNumber": "8"}
+                ],
+            )
+
+    @patch(
+        "app.services.seat_agent_service.NestClient",
+        return_value=FailedComparisonFakeNestClient(),
+    )
+    def test_comparison_search_failure_is_not_reported_as_no_evidence(self, _):
+        with self.assertRaises(NestClientError):
+            recommend_seat(
+                SeatRecommendationRequest(
+                    question="선택한 좌석을 비교해줘",
+                    theaterName="세종문화회관 대극장",
+                    musicalTitle="웃는 남자",
+                    candidates=[
+                        {"floor": "1층", "row": "1", "seatNumber": "8"},
+                        {"floor": "1층", "row": "1", "seatNumber": "9"},
+                    ],
+                    useRag=False,
+                )
+            )
+
+    def test_sectionless_exact_seats_keep_distinct_numbers(self):
+        candidates = _extract_seat_candidates(
+            "1층 8열 12번, 1층 8열 13번 중에서 비교해줘"
+        )
+
+        self.assertEqual(
+            [(candidate.floor, candidate.row, candidate.seat_number) for candidate in candidates],
+            [("1층", "8", "12"), ("1층", "8", "13")],
+        )
+
+    def test_sparse_exact_seat_review_is_not_replaced_by_nearby_review(self):
+        scope = _load_review_scope(
+            SparseExactScopeFakeNestClient(),
+            AgentFilters(
+                theaterName="세종문화회관 대극장",
+                musicalTitle="웃는 남자",
+                seatFloor="1층",
+                seatSection="B",
+                seatRow="8",
+                seatNumber="12",
+                priorities=["view"],
+            ),
+            10,
+            "recommendation",
+        )
+
+        self.assertEqual(scope.label, "exact")
+        self.assertEqual(scope.exact_count, 1)
+        self.assertEqual([review["id"] for review in scope.reviews], ["exact-12"])
+
     @patch("app.services.seat_agent_service.NestClient", return_value=FakeNestClient())
     def test_recommends_with_evidence_and_mcp_status(self, _):
         result = recommend_seat(
@@ -1106,6 +1250,7 @@ class SeatAgentServiceTest(unittest.TestCase):
         self.assertNotIn("시야는 좋은 편", result.recommendation)
         self.assertNotIn("정확히 맞는 후기가 적어서", result.recommendation)
 
+
     @patch(
         "app.services.seat_agent_service.NestClient",
         return_value=CandidateComparisonFakeNestClient(),
@@ -1135,6 +1280,62 @@ class SeatAgentServiceTest(unittest.TestCase):
         self.assertEqual(result.official_section, "E")
         self.assertEqual(result.direction, "중앙블록")
 
+    @patch(
+        "app.services.seat_agent_service.NestClient",
+        return_value=EmptyComparisonFakeNestClient(),
+    )
+    def test_exact_seat_comparison_abstains_when_reviews_are_missing(self, _):
+        result = recommend_seat(
+            SeatRecommendationRequest(
+                question=(
+                    "1층 B구역 8열 12번, 1층 B구역 8열 13번 중에서 "
+                    "실제 후기만 근거로 비교해줘"
+                ),
+                theaterName="세종문화회관 대극장",
+                musicalTitle="웃는 남자",
+                useRag=False,
+                limit=5,
+            )
+        )
+
+        self.assertEqual(result.evidence_reviews, [])
+        self.assertEqual(result.rag_status, "skipped")
+        self.assertIn("판단할 후기가 부족", result.recommendation)
+        self.assertNotIn("추천합니다", result.recommendation)
+        self.assertIn("후기가 없어", " ".join(result.cautions))
+        self.assertEqual(result.filters.seat_number, "12")
+
+    @patch(
+        "app.services.seat_agent_service.NestClient",
+        return_value=EmptyComparisonFakeNestClient(),
+    )
+    def test_structured_op_candidates_abstain_without_text_reparsing(self, _):
+        result = recommend_seat(
+            SeatRecommendationRequest(
+                question="선택한 두 좌석을 실제 후기만으로 비교해줘",
+                theaterName="세종문화회관 대극장",
+                musicalTitle="웃는 남자",
+                candidates=[
+                    {
+                        "floor": "1층",
+                        "section": "OP",
+                        "row": "1",
+                        "seatNumber": "8",
+                    },
+                    {
+                        "floor": "1층",
+                        "section": "OP",
+                        "row": "1",
+                        "seatNumber": "9",
+                    },
+                ],
+                useRag=False,
+            )
+        )
+
+        self.assertIn("OP구역 1열 8번", result.recommendation)
+        self.assertIn("OP구역 1열 9번", result.recommendation)
+        self.assertNotIn("추천합니다", result.recommendation)
     @patch(
         "app.services.seat_agent_service.NestClient",
         return_value=CandidateComparisonFakeNestClient(),

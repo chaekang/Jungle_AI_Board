@@ -104,6 +104,7 @@ class SeatCandidate:
     section: str | None
     row: str | None
     side: str | None
+    seat_number: str | None = None
     center_core: bool = False
 
 
@@ -144,7 +145,7 @@ def recommend_seat(request: SeatRecommendationRequest) -> SeatRecommendationResp
         mcp = get_seat_layout(filters.theater_name)
         mcp_status = mcp.status
 
-    seat_candidates = _extract_seat_candidates(request.question)
+    seat_candidates = _request_seat_candidates(request) or _extract_seat_candidates(request.question)
     if len(seat_candidates) >= 2:
         return _compare_seat_candidates(
             client,
@@ -306,12 +307,39 @@ def _extract_filters(request: SeatRecommendationRequest, client: NestClient) -> 
     )
 
 
+def _request_seat_candidates(request: SeatRecommendationRequest) -> list[SeatCandidate]:
+    candidates: list[SeatCandidate] = []
+    for candidate in request.candidates:
+        label = " ".join(
+            part
+            for part in (
+                candidate.floor,
+                f"{candidate.section}구역" if candidate.section else None,
+                f"{candidate.row}열" if candidate.row else None,
+                f"{candidate.seat_number}번" if candidate.seat_number else None,
+            )
+            if part
+        )
+        candidates.append(
+            SeatCandidate(
+                label=label or "선택 좌석",
+                floor=candidate.floor,
+                section=candidate.section,
+                row=candidate.row,
+                side=_section_to_side(candidate.section),
+                seat_number=candidate.seat_number,
+            )
+        )
+    return candidates
+
+
 def _extract_seat_candidates(question: str) -> list[SeatCandidate]:
     candidates: list[SeatCandidate] = []
     pattern = re.compile(
         r"(?P<floor>\d+)\s*(?P<floor_unit>층|F)\s*"
-        r"(?P<block>좌블|중중블|중블|우블|좌측|중앙|오른쪽|왼쪽|[A-Z]\s*(?:구역|블록|블럭))\s*"
-        r"(?P<row>\d+)\s*열",
+        r"(?P<block>좌블|중중블|중블|우블|좌측|중앙|오른쪽|왼쪽|[A-Z]+\s*(?:구역|블록|블럭))\s*"
+        r"(?P<row>\d+)\s*열"
+        r"(?:\s*(?P<number>\d+)\s*번)?",
         flags=re.IGNORECASE,
     )
 
@@ -321,20 +349,24 @@ def _extract_seat_candidates(question: str) -> list[SeatCandidate]:
         side = _candidate_side(block) or _section_to_side(section)
         floor = f"{match.group('floor')}{_floor_unit(match.group('floor_unit'))}"
         row = match.group("row")
+        number = match.group("number")
+        number_label = f" {number}번" if number else ""
         candidates.append(
             SeatCandidate(
-                label=f"{floor} {_candidate_block_label(block)} {row}열",
+                label=f"{floor} {_candidate_block_label(block)} {row}열{number_label}",
                 floor=floor,
                 section=section,
                 row=row,
                 side=side,
+                seat_number=number,
                 center_core=_candidate_is_center_core(block),
             )
         )
 
     row_block_pattern = re.compile(
         r"(?P<row>\d+)\s*열\s*"
-        r"(?P<block>사이드\s*블록\s*통로석|사이드\s*블록|사이드\s*통로|극\s*사이드|완전\s*사이드|극싸|사블통|사블|좌블통|중블통|우블통|좌블|중중블|중블|우블|좌측|중앙|오른쪽|왼쪽|[A-Z]\s*(?:구역|블록|블럭))",
+        r"(?P<block>사이드\s*블록\s*통로석|사이드\s*블록|사이드\s*통로|극\s*사이드|완전\s*사이드|극싸|사블통|사블|좌블통|중블통|우블통|좌블|중중블|중블|우블|좌측|중앙|오른쪽|왼쪽|[A-Z]+\s*(?:구역|블록|블럭))"
+        r"(?:\s*(?P<number>\d+)\s*번)?",
         flags=re.IGNORECASE,
     )
 
@@ -343,14 +375,39 @@ def _extract_seat_candidates(question: str) -> list[SeatCandidate]:
         section = _candidate_section(block)
         side = _candidate_side(block) or _section_to_side(section)
         row = match.group("row")
+        number = match.group("number")
+        number_label = f" {number}번" if number else ""
         candidates.append(
             SeatCandidate(
-                label=f"{row}열 {_candidate_block_label(block)}",
+                label=f"{row}열 {_candidate_block_label(block)}{number_label}",
                 floor=None,
                 section=section,
                 row=row,
                 side=side,
+                seat_number=number,
                 center_core=_candidate_is_center_core(block),
+            )
+        )
+
+    floor_row_number_pattern = re.compile(
+        r"(?P<floor>\d+)\s*(?P<floor_unit>층|F)\s*"
+        r"(?P<row>\d+)\s*열\s*"
+        r"(?P<number>\d+)\s*번",
+        flags=re.IGNORECASE,
+    )
+
+    for match in floor_row_number_pattern.finditer(question):
+        floor = f"{match.group('floor')}{_floor_unit(match.group('floor_unit'))}"
+        row = match.group("row")
+        number = match.group("number")
+        candidates.append(
+            SeatCandidate(
+                label=f"{floor} {row}열 {number}번",
+                floor=floor,
+                section=None,
+                row=row,
+                side=None,
+                seat_number=number,
             )
         )
 
@@ -530,20 +587,26 @@ def _compare_seat_candidates(
         best,
     )
     evidence = _merge_candidate_evidence(evaluations, request.limit)
+    should_abstain = any(
+        evaluation.search_scope.exact_count == 0 for evaluation in evaluations
+    )
+    comparison_answer = (
+        _build_candidate_comparison_abstention(evaluations)
+        if should_abstain
+        else _build_floor_comparison_answer(evaluations, winner)
+        if _is_floor_candidate_comparison(evaluations)
+        else _build_candidate_comparison_answer(request.question, evaluations, winner)
+    )
 
     return SeatRecommendationResponse(
-        recommendation=_build_floor_comparison_answer(evaluations, winner)
-        if _is_floor_candidate_comparison(evaluations)
-        else _build_candidate_comparison_answer(
-            request.question,
-            evaluations,
-            winner,
-        ),
+        recommendation=comparison_answer,
         officialSection=official_section,
         descriptiveBlock=descriptive_block,
         direction=_direction_label(descriptive_block),
         reasons=_build_candidate_comparison_reasons(evaluations, winner),
-        cautions=_build_cautions(evidence, official_section),
+        cautions=_build_candidate_comparison_cautions(
+            evaluations, evidence, official_section
+        ),
         evidenceReviews=evidence,
         filters=winner.filters,
         mcpStatus=mcp_status,
@@ -571,12 +634,18 @@ def _evaluate_seat_candidate(
             "seat_floor": candidate.floor or base_filters.seat_floor,
             "seat_section": candidate.section,
             "seat_row": candidate.row,
-            "seat_number": None,
+            "seat_number": candidate.seat_number,
             "side": candidate.side or base_filters.side,
             "center_core": candidate.center_core or base_filters.center_core,
         }
     )
-    search_scope = _load_review_scope(client, candidate_filters, request.limit, intent)
+    search_scope = _load_review_scope(
+        client,
+        candidate_filters,
+        request.limit,
+        intent,
+        fail_on_search_error=True,
+    )
     scored = sorted(
         (
             _score_review(review, candidate_filters, _extract_focus_subject(request.question))
@@ -858,6 +927,8 @@ def _load_review_scope(
     filters: AgentFilters,
     limit: int,
     intent: str,
+    *,
+    fail_on_search_error: bool = False,
 ) -> ReviewSearchScope:
     if intent == "obstruction_range":
         reviews = _search_obstruction_range_reviews(client, filters)
@@ -867,7 +938,9 @@ def _load_review_scope(
             exact_count=len(reviews),
         )
 
-    exact_reviews = _search_reviews(client, filters, limit)
+    exact_reviews = _search_reviews(
+        client, filters, limit, fail_on_error=fail_on_search_error
+    )
     if filters.center_core:
         center_core_reviews = _filter_center_core_reviews(exact_reviews, filters)
         if center_core_reviews:
@@ -875,11 +948,16 @@ def _load_review_scope(
     if filters.aisle_offset is not None:
         exact_reviews = _filter_aisle_offset_reviews(exact_reviews, filters)
 
+    if filters.seat_number and exact_reviews:
+        return ReviewSearchScope(reviews=exact_reviews, label="exact", exact_count=len(exact_reviews))
+
     if len(exact_reviews) >= min(3, limit) or not filters.seat_row:
         return ReviewSearchScope(reviews=exact_reviews, label="exact", exact_count=len(exact_reviews))
 
     broad_filters = filters.model_copy(update={"seat_row": None, "seat_number": None})
-    broad_reviews = _search_reviews(client, broad_filters, 50)
+    broad_reviews = _search_reviews(
+        client, broad_filters, 50, fail_on_error=fail_on_search_error
+    )
 
     if not broad_reviews:
         return ReviewSearchScope(
@@ -924,11 +1002,19 @@ def _load_review_scope(
     )
 
 
-def _search_reviews(client: NestClient, filters: AgentFilters, limit: int) -> list[dict]:
+def _search_reviews(
+    client: NestClient,
+    filters: AgentFilters,
+    limit: int,
+    *,
+    fail_on_error: bool = False,
+) -> list[dict]:
     try:
         search_result = client.get_json("/seat-reviews/search", _to_search_params(filters, limit))
         return search_result.get("items", []) if isinstance(search_result, dict) else []
     except NestClientError:
+        if fail_on_error:
+            raise
         return []
 
 
@@ -1630,10 +1716,14 @@ def _build_candidate_comparison_reasons(
     evaluations: list[CandidateEvaluation],
     winner: CandidateEvaluation,
 ) -> list[str]:
-    reasons = [
-        f"후보 좌석 {len(evaluations)}개를 각각 검색해서 비교했습니다.",
-        f"{winner.candidate.label}의 점수가 가장 높았습니다.",
-    ]
+    reasons = [f"후보 좌석 {len(evaluations)}개를 각각 검색해서 비교했습니다."]
+
+    if all(evaluation.search_scope.exact_count > 0 for evaluation in evaluations):
+        reasons.append(f"{winner.candidate.label}의 후기 평가가 가장 높았습니다.")
+    else:
+        reasons.append(
+            "동일 좌석 후기가 없는 후보는 점수만으로 우열을 정하지 않았습니다."
+        )
 
     for evaluation in evaluations:
         if evaluation.search_scope.exact_count:
@@ -1644,8 +1734,42 @@ def _build_candidate_comparison_reasons(
             reasons.append(
                 f"{evaluation.candidate.label}은 주변 좌석 후기를 보조 근거로 반영했습니다."
             )
+        else:
+            reasons.append(f"{evaluation.candidate.label}은 참고할 후기 자체가 없습니다.")
 
     return reasons
+
+
+def _build_candidate_comparison_abstention(
+    evaluations: list[CandidateEvaluation],
+) -> str:
+    missing_labels = [
+        evaluation.candidate.label
+        for evaluation in evaluations
+        if evaluation.search_scope.exact_count == 0
+    ]
+    seats = ", ".join(missing_labels)
+    return (
+        f"{seats}의 동일 좌석 후기가 없어 아직 우열을 판단할 후기가 부족합니다. "
+        "인접 좌석이나 같은 구역 후기는 별도 참고 자료로 볼 수 있지만, "
+        "그 후기만으로 선택한 좌석의 장단점을 만들지는 않았습니다."
+    )
+
+
+def _build_candidate_comparison_cautions(
+    evaluations: list[CandidateEvaluation],
+    evidence: list[EvidenceReview],
+    official_section: str | None,
+) -> list[str]:
+    cautions = _build_cautions(evidence, official_section)
+    missing = [
+        evaluation.candidate.label
+        for evaluation in evaluations
+        if evaluation.search_scope.exact_count == 0
+    ]
+    if missing:
+        cautions.insert(0, f"{', '.join(missing)}의 동일 좌석 후기가 없어 비교를 보류했습니다.")
+    return cautions
 
 
 def _build_reasons(

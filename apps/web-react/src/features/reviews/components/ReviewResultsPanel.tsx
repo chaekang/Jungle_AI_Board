@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react"
 import SeatReviewCard from "./SeatReviewCard"
+import { hasComparisonSeat } from "../../agent/seat-comparison"
 import type { PublicSeatReview } from "../types"
 
 const TheaterSeatMap = lazy(() => import("./TheaterSeatMap"))
@@ -9,6 +10,7 @@ export type ReviewResultsViewMode = "board" | "seatMap"
 type ReviewResultsPanelProps = {
   actionError: string
   currentUserId?: string
+  comparisonSeats: PublicSeatReview[]
   error: string
   hasNext: boolean
   isLoading: boolean
@@ -19,6 +21,7 @@ type ReviewResultsPanelProps = {
   onReportReview: (review: PublicSeatReview) => void
   onSelectReview: (review: PublicSeatReview) => void
   onTheaterSelect?: (review: PublicSeatReview) => void
+  onToggleComparison: (review: PublicSeatReview) => void
   page: number
   reviews: PublicSeatReview[]
   theaterName: string
@@ -30,6 +33,7 @@ type ReviewResultsPanelProps = {
 export default function ReviewResultsPanel({
   actionError,
   currentUserId,
+  comparisonSeats,
   error,
   hasNext,
   isLoading,
@@ -40,6 +44,7 @@ export default function ReviewResultsPanel({
   onReportReview,
   onSelectReview,
   onTheaterSelect,
+  onToggleComparison,
   page,
   reviews,
   theaterName,
@@ -75,10 +80,12 @@ export default function ReviewResultsPanel({
         viewMode === "seatMap" ? (
           <Suspense fallback={<p className="review-board-state">좌석배치도를 불러오는 중입니다.</p>}>
             <TheaterSeatMap
+              comparisonSeats={comparisonSeats}
               currentUserId={currentUserId}
               onDeleteReview={onDeleteReview}
               onEditReview={onEditReview}
               onReportReview={onReportReview}
+              onToggleComparison={onToggleComparison}
               reviews={reviews}
               theaterName={theaterName}
             />
@@ -89,12 +96,14 @@ export default function ReviewResultsPanel({
               reviews.map((review) => (
                 <SeatReviewCard
                   canManage={review.author.id === currentUserId}
+                  isInComparison={hasComparisonSeat(comparisonSeats, review)}
                   key={review.id}
                   onDelete={onDeleteReview}
                   onEdit={onEditReview}
                   onReport={onReportReview}
                   onSelect={onSelectReview}
                   onTheaterSelect={onTheaterSelect}
+                  onToggleComparison={onToggleComparison}
                   review={review}
                 />
               ))

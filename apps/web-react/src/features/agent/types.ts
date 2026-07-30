@@ -14,7 +14,10 @@ export type AgentFilters = {
   seasonLabel?: string | null
   seatFloor?: string | null
   seatSection?: string | null
-  side?: "left" | "center" | "right" | null
+  seatRow?: string | null
+  seatNumber?: string | null
+  side?: "left" | "center" | "right" | "side" | null
+  centerCore?: boolean
   priorities: AgentPriority[]
   budget?: number | null
 }
@@ -44,12 +47,21 @@ export type SeatRecommendation = {
   ragAnswer?: string | null
 }
 
+export type AgentSeatCandidateInput = {
+  floor: string
+  section?: string | null
+  row: string
+  seatNumber: string
+}
+
 export type SeatRecommendationInput = {
   question: string
   theaterName?: string
   musicalTitle?: string
   seasonLabel?: string
   priorities?: AgentPriority[]
+  candidates?: AgentSeatCandidateInput[]
+  budget?: number
   limit?: number
   useRag?: boolean
 }

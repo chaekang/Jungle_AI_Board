@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { getCurrentUser } from "../auth/api"
 import SeatAssistantPanel from "../agent/components/SeatAssistantPanel"
+import { toggleComparisonSeat as resolveComparisonSeatToggle } from "../agent/seat-comparison"
 import { getTags } from "../tags/api"
 import ReportReviewDialog from "./components/ReportReviewDialog"
 import ReviewDetailModal from "./components/ReviewDetailModal"
 import ReviewResultsPanel from "./components/ReviewResultsPanel"
-import { deleteSeatReview, getPerformances, getTheaters, reportSeatReview } from "./api"
+import { deleteSeatReview, getPerformances, getSeatReview, getTheaters, reportSeatReview } from "./api"
 import { useSeatReviews } from "./hooks/useSeatReviews"
 import {
   buildSeatReviewSearchQuery,
@@ -138,6 +139,8 @@ export default function TheaterReviewsPage() {
   const [reportError, setReportError] = useState("")
   const [reportMessage, setReportMessage] = useState("")
   const [actionError, setActionError] = useState("")
+  const [comparisonSeats, setComparisonSeats] = useState<PublicSeatReview[]>([])
+  const [comparisonMessage, setComparisonMessage] = useState("")
   const selectedTheater = getTheaterById(theaters, theaterId)
   const theaterName = selectedTheater ? getCanonicalTheaterName(selectedTheater.name) : ""
   const selectedPerformanceId =
@@ -431,6 +434,21 @@ export default function TheaterReviewsPage() {
       setReportError(err instanceof Error ? err.message : "후기 신고에 실패했습니다.")
     } finally {
       setIsReportingReview(false)
+    }
+  }
+
+  function toggleComparisonSeat(review: PublicSeatReview) {
+    const result = resolveComparisonSeatToggle(comparisonSeats, review)
+    setComparisonSeats(result.seats)
+    setComparisonMessage(result.message)
+  }
+
+  async function openEvidenceReview(reviewId: string) {
+    try {
+      setActionError("")
+      setSelectedReview(await getSeatReview(reviewId))
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "근거 후기를 열지 못했습니다.")
     }
   }
 
@@ -770,6 +788,7 @@ export default function TheaterReviewsPage() {
         <section className="review-board-list-panel theater-reviews-list-panel">
           <ReviewResultsPanel
             actionError={actionError}
+            comparisonSeats={comparisonSeats}
             currentUserId={currentUser?.id}
             error={viewError}
             hasNext={hasNext}
@@ -780,6 +799,7 @@ export default function TheaterReviewsPage() {
             onPreviousPage={() => setReviewPage((currentPage) => Math.max(1, currentPage - 1))}
             onReportReview={handleReportReview}
             onSelectReview={setSelectedReview}
+            onToggleComparison={toggleComparisonSeat}
             page={page}
             reviews={effectiveViewMode === "seatMap" ? seatMapReviews : reviews}
             theaterName={theaterName}
@@ -823,7 +843,22 @@ export default function TheaterReviewsPage() {
         </p>
       ) : null}
 
-      <SeatAssistantPanel />
+      <SeatAssistantPanel
+        comparisonMessage={comparisonMessage}
+        comparisonSeats={comparisonSeats}
+        onClearComparison={() => {
+          setComparisonSeats([])
+          setComparisonMessage("")
+        }}
+        onEvidenceSelect={(reviewId) => void openEvidenceReview(reviewId)}
+        onRelaxSearch={() => {
+          setReviewPage(1)
+          setSeatFilter(initialSeatFilter)
+          setRatingFilters(initialRatingFilters)
+        }}
+        onRemoveComparisonSeat={toggleComparisonSeat}
+        onWriteReview={() => handleWriteReview()}
+      />
     </main>
   )
 }

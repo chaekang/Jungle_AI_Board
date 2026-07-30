@@ -1414,3 +1414,42 @@
     flex-direction: column;
   }
 }
+
+.board-review-compare-button {
+  min-height: 28px;
+  margin-left: auto;
+  border: 1px solid #6f1d2a;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #6f1d2a;
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 850;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.board-review-compare-button:hover,
+.board-review-compare-button:focus-visible,
+.board-review-compare-button[aria-pressed="true"] {
+  background: #6f1d2a;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.board-review-compare-button + .board-review-report-button {
+  margin-left: 0;
+}
+.theater-seat-map-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.theater-seat-map-modal-actions button:first-child {
+  width: auto;
+  border-radius: 999px;
+  padding: 0 12px;
+}

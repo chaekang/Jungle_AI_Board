@@ -8,12 +8,15 @@ import {
 } from "../theater-seat-map-configs"
 import { groupBlocksByBand } from "../seat-map-position"
 import type { PublicSeatReview } from "../types"
+import { hasComparisonSeat } from "../../agent/seat-comparison"
 
 type TheaterSeatMapProps = {
+  comparisonSeats: PublicSeatReview[]
   currentUserId?: string
   onDeleteReview?: (review: PublicSeatReview) => void
   onEditReview?: (review: PublicSeatReview) => void
   onReportReview?: (review: PublicSeatReview) => void
+  onToggleComparison: (review: PublicSeatReview) => void
   reviews: PublicSeatReview[]
   theaterName: string
 }
@@ -159,10 +162,12 @@ function getSeatReviewLabel(
 }
 
 export default function TheaterSeatMap({
+  comparisonSeats,
   currentUserId,
   onDeleteReview,
   onEditReview,
   onReportReview,
+  onToggleComparison,
   reviews,
   theaterName,
 }: TheaterSeatMapProps) {
@@ -329,18 +334,27 @@ export default function TheaterSeatMap({
           <div className="theater-seat-map-modal-card">
             <header>
               <h2>좌석 후기</h2>
-              <button type="button" onClick={() => setSelectedSeatKey(null)}>
-                닫기
-              </button>
+              <div className="theater-seat-map-modal-actions">
+                <button type="button" onClick={() => onToggleComparison(selectedReviews[0])}>
+                  {hasComparisonSeat(comparisonSeats, selectedReviews[0])
+                    ? "비교함에서 빼기"
+                    : "이 좌석 비교함에 담기"}
+                </button>
+                <button type="button" onClick={() => setSelectedSeatKey(null)}>
+                  닫기
+                </button>
+              </div>
             </header>
             <div className="theater-seat-map-modal-list">
               {selectedReviews.map((review) => (
                 <SeatReviewCard
                   canManage={review.author.id === currentUserId}
+                  isInComparison={hasComparisonSeat(comparisonSeats, review)}
                   key={review.id}
                   onDelete={onDeleteReview}
                   onEdit={onEditReview}
                   onReport={onReportReview}
+                  onToggleComparison={onToggleComparison}
                   review={review}
                 />
               ))}
