@@ -20,6 +20,8 @@ services:
       retries: 5
 
   nest-api:
+    env_file:
+      - ./apps/nest-api/.env
     build:
       context: ./apps/nest-api
     container_name: jungle-ai-board-nest-api
@@ -45,7 +47,6 @@ services:
       GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
       GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI:-http://localhost:8080/api/auth/google/callback}
       GOOGLE_OAUTH_STATE_SECRET: ${GOOGLE_OAUTH_STATE_SECRET:-change-this-before-public-deploy-oauth-state}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
       OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-gpt-4o-mini}
       RAG_QUESTION_RATE_LIMIT_MAX_REQUESTS: ${RAG_QUESTION_RATE_LIMIT_MAX_REQUESTS:-20}
