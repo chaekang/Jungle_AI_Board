@@ -138,6 +138,7 @@ jobs:
                 -f docker-compose.yml \
                 -f docker-compose.prod.yml \
                 exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' \
+                < /dev/null \
                 > "$backup_file"
               ls -1t backups/predeploy-*.dump | tail -n +4 | xargs -r rm --
             fi
@@ -160,6 +161,13 @@ jobs:
               http://127.0.0.1:8080/health
             curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
               http://127.0.0.1:8080/api/health
+            expected_title_tag="$(grep -o '<title>[^<]*</title>' apps/web-react/index.html)"
+            served_html="$(curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
+              http://127.0.0.1:8080/)"
+            if [[ -z "$expected_title_tag" || "$served_html" != *"$expected_title_tag"* ]]; then
+              echo "Deployment verification failed: the served web build is stale." >&2
+              exit 1
+            fi
             docker image prune -f
             docker builder prune -f --filter 'until=168h'
           REMOTE
@@ -176,3 +184,12 @@ jobs:
             --connect-timeout 5 --max-time 15 \
             --retry 12 --retry-delay 5 --retry-all-errors \
             "https://$LIGHTSAIL_DOMAIN/api/health"
+          expected_title_tag="$(grep -o '<title>[^<]*</title>' apps/web-react/index.html)"
+          served_html="$(curl --fail --show-error --silent \
+            --connect-timeout 5 --max-time 15 \
+            --retry 12 --retry-delay 5 --retry-all-errors \
+            "https://$LIGHTSAIL_DOMAIN/")"
+          if [[ -z "$expected_title_tag" || "$served_html" != *"$expected_title_tag"* ]]; then
+            echo "Public deployment verification failed: the served web build is stale." >&2
+            exit 1
+          fi
