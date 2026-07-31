@@ -510,7 +510,7 @@ export default function ReviewBoardPage() {
     <main className="review-board-page">
       <div className="review-board-shell">
         <header className="review-board-header">
-          <h1>게시판</h1>
+          <h1>커튼콜 시트</h1>
           <div className="review-board-auth-actions">
             {isAuthenticated ? (
               <button type="button" onClick={() => setIsLogoutConfirmOpen(true)}>
@@ -700,7 +700,7 @@ export default function ReviewBoardPage() {
               aria-pressed={effectiveViewMode === "board"}
               onClick={() => setViewMode("board")}
             >
-              게시판
+              전체 후기
             </button>
             {canShowSeatMap ? (
               <button

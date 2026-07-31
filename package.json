@@ -1,5 +1,5 @@
 {
-  "name": "agentic-board",
+  "name": "curtaincall-seat",
   "private": true,
   "scripts": {
     "install:all": "npm run nest:install && npm run web:install",

@@ -1,6 +1,6 @@
 # Nest API
 
-This folder contains the existing NestJS backend for the `agentic-board` workspace.
+이 폴더에는 커튼콜 시트의 NestJS 백엔드가 있습니다.
 
 ## Run
 

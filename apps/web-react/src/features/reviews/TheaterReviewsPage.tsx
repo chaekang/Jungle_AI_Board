@@ -467,7 +467,7 @@ export default function TheaterReviewsPage() {
       <main className="review-board-page theater-reviews-page">
         <section className="theater-reviews-empty theater-reviews-empty--error">
           <p>{theaterError}</p>
-          <Link to="/">전체 후기 게시판으로 돌아가기</Link>
+          <Link to="/">커튼콜 시트로 돌아가기</Link>
         </section>
       </main>
     )
@@ -478,7 +478,7 @@ export default function TheaterReviewsPage() {
       <main className="review-board-page theater-reviews-page">
         <section className="theater-reviews-empty">
           <p>찾을 수 없는 극장입니다.</p>
-          <Link to="/">전체 후기 게시판으로 돌아가기</Link>
+          <Link to="/">커튼콜 시트로 돌아가기</Link>
         </section>
       </main>
     )

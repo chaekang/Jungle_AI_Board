@@ -1,7 +1,7 @@
 {
-  "name": "nest-api",
+  "name": "curtaincall-seat-api",
   "version": "0.0.1",
-  "description": "NestJS API for the agentic-board workspace.",
+  "description": "커튼콜 시트 NestJS API.",
   "author": "",
   "private": true,
   "license": "UNLICENSED",

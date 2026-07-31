@@ -192,10 +192,10 @@ export default function AuthPage() {
     <main className="auth-page">
       <div className="auth-layout">
         <header className="auth-brand">
-          <p className="brand-kicker">MUSICAL SEAT ARCHIVE</p>
-          <h1>Agentic Board</h1>
+          <p className="brand-kicker">뮤지컬 좌석 후기</p>
+          <h1>커튼콜 시트</h1>
           <p className="brand-copy">
-            A simple sign-in flow for reviews, seat notes, and saved activity.
+            좌석 후기를 기록하고 나만의 관극 경험을 이어가세요.
           </p>
           <button type="button" className="auth-home-button" onClick={() => navigate("/")}>
             Home
