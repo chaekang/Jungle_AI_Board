@@ -30,6 +30,20 @@ function makeMessageId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
+function getContextSeatLabel(seat: PublicSeatReview, selectedSeats: PublicSeatReview[]) {
+  const firstSeat = selectedSeats[0]
+  const comparesDifferentPerformances = selectedSeats.some(
+    (selectedSeat) =>
+      selectedSeat.musical.id !== firstSeat?.musical.id ||
+      selectedSeat.performance?.id !== firstSeat?.performance?.id,
+  )
+  const seatLabel = getSeatLabel(seat)
+
+  return comparesDifferentPerformances
+    ? seat.musical.title + " · " + seatLabel
+    : seatLabel
+}
+
 export default function SeatAssistantPanel({
   comparisonSeats = [],
   comparisonMessage = "",
@@ -175,10 +189,10 @@ export default function SeatAssistantPanel({
               <button
                 key={getComparisonSeatKey(seat)}
                 type="button"
-                aria-label={`${getSeatLabel(seat)} 비교 선택 해제`}
+                aria-label={`${getContextSeatLabel(seat, comparisonSeats)} 비교 선택 해제`}
                 onClick={() => onRemoveComparisonSeat?.(seat)}
               >
-                <span>{getSeatLabel(seat)}</span>
+                <span>{getContextSeatLabel(seat, comparisonSeats)}</span>
                 <b aria-hidden="true">×</b>
               </button>
             ))}
@@ -230,10 +244,10 @@ export default function SeatAssistantPanel({
                   <button
                     key={getComparisonSeatKey(seat)}
                     type="button"
-                    aria-label={`${getSeatLabel(seat)} 참고 좌석에서 빼기`}
+                    aria-label={`${getContextSeatLabel(seat, comparisonSeats)} 참고 좌석에서 빼기`}
                     onClick={() => onRemoveComparisonSeat?.(seat)}
                   >
-                    <span>{getSeatLabel(seat)}</span>
+                    <span>{getContextSeatLabel(seat, comparisonSeats)}</span>
                     <b aria-hidden="true">×</b>
                   </button>
                 ))}

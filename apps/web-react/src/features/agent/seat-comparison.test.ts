@@ -48,6 +48,27 @@ test("comparison seat toggle removes an existing seat using the shared identity 
 
   assert.deepEqual(toggleComparisonSeat([first], sameSeat), { seats: [], message: "" })
 })
+
+test("comparison accepts different performances in the same theater only", () => {
+  const first = makeReview("1")
+  const differentPerformance = makeReview("2", {
+    musical: { id: "21", title: "팬텀" },
+    performance: { id: "31", seasonLabel: "2025" },
+    seat: { floor: "2층", section: "C", row: "3", number: "10" },
+  })
+  const differentTheater = makeReview("3", {
+    theater: { id: "11", name: "블루스퀘어 신한카드홀" },
+  })
+
+  assert.deepEqual(addComparisonSeat([first], differentPerformance), {
+    seats: [first, differentPerformance],
+    message: "",
+  })
+  assert.deepEqual(addComparisonSeat([first], differentTheater), {
+    seats: [first],
+    message: "같은 극장의 좌석끼리 비교할 수 있어요.",
+  })
+})
 test("evidence summary keeps sample size prominent and separates positive and caution reviews", () => {
   const positive = makeReview("1")
   const caution = makeReview("2", {
@@ -88,8 +109,22 @@ test("structured candidates preserve multi-letter and missing sections without t
   })
 
   assert.deepEqual(buildComparisonCandidates([opSeat, sectionlessSeat]), [
-    { floor: "1층", section: "OP", row: "1", seatNumber: "8" },
-    { floor: "2층", section: null, row: "5", seatNumber: "9" },
+    {
+      floor: "1층",
+      section: "OP",
+      row: "1",
+      seatNumber: "8",
+      musicalTitle: "웃는 남자",
+      seasonLabel: "2026",
+    },
+    {
+      floor: "2층",
+      section: null,
+      row: "5",
+      seatNumber: "9",
+      musicalTitle: "웃는 남자",
+      seasonLabel: "2026",
+    },
   ])
 })
 test("comparison question includes exact seat numbers and explicitly disables generic recommendation framing", () => {

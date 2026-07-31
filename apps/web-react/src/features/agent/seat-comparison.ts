@@ -87,15 +87,10 @@ export function addComparisonSeat(
   }
 
   const firstSeat = currentSeats[0]
-  if (
-    firstSeat &&
-    (firstSeat.theater.id !== nextSeat.theater.id ||
-      (firstSeat.performance?.id ?? firstSeat.musical.id) !==
-        (nextSeat.performance?.id ?? nextSeat.musical.id))
-  ) {
+  if (firstSeat && firstSeat.theater.id !== nextSeat.theater.id) {
     return {
       seats: currentSeats,
-      message: "같은 극장과 공연의 좌석끼리 비교할 수 있어요.",
+      message: "같은 극장의 좌석끼리 비교할 수 있어요.",
     }
   }
 
@@ -253,6 +248,8 @@ export function buildComparisonCandidates(
     section: seat.seat.section,
     row: seat.seat.row,
     seatNumber: seat.seat.number,
+    musicalTitle: seat.musical.title,
+    seasonLabel: seat.performance?.seasonLabel ?? undefined,
   }))
 }
 

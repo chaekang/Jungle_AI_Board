@@ -52,9 +52,46 @@ test("free-form question is preserved while selected seats are sent as optional 
   assert.equal(input.question, question)
   assert.equal(input.useRag, true)
   assert.deepEqual(input.candidates, [
-    { floor: "3층", section: "B", row: "4", seatNumber: "23" },
-    { floor: "3층", section: "B", row: "4", seatNumber: "24" },
+    {
+      floor: "3층",
+      section: "B",
+      row: "4",
+      seatNumber: "23",
+      musicalTitle: "웃는 남자",
+      seasonLabel: "2026",
+    },
+    {
+      floor: "3층",
+      section: "B",
+      row: "4",
+      seatNumber: "24",
+      musicalTitle: "웃는 남자",
+      seasonLabel: "2026",
+    },
   ])
+})
+
+test("different performances keep seat-specific production context", () => {
+  const first = makeReview("1", "23")
+  const second = makeReview("2", "24")
+  second.musical = { id: "21", title: "팬텀" }
+  second.performance = { id: "31", seasonLabel: "2025" }
+
+  const input = buildSeatAssistantRequest("둘 중 시야가 더 좋은 곳은?", [first, second])
+
+  assert.equal(input.theaterName, "블루스퀘어 신한카드홀")
+  assert.equal(input.musicalTitle, undefined)
+  assert.equal(input.seasonLabel, undefined)
+  assert.deepEqual(
+    input.candidates?.map(({ musicalTitle, seasonLabel }) => ({
+      musicalTitle,
+      seasonLabel,
+    })),
+    [
+      { musicalTitle: "웃는 남자", seasonLabel: "2026" },
+      { musicalTitle: "팬텀", seasonLabel: "2025" },
+    ],
+  )
 })
 
 test("chat UI does not expose retrieval internals or replace the composer", () => {
@@ -103,6 +140,8 @@ test("chat layout keeps the conversation flexible and the composer anchored", ()
   assert.match(component, /document\.addEventListener\("pointerdown", handlePointerDown\)/)
   assert.match(component, /event\.key !== "Escape"/)
   assert.match(component, /chatRef\.current\?\.contains\(target\)/)
+  assert.match(component, /getContextSeatLabel\(seat, comparisonSeats\)/)
+  assert.match(component, /seat\.musical\.title \+ " · " \+ seatLabel/)
   assert.match(component, /const shouldClearComparison = comparisonSeats\.length >= 2/)
   assert.match(component, /if \(shouldClearComparison\) \{\s+onClearComparison\?\.\(\)/)
   assert.match(styles, /scrollbar-width: none/)

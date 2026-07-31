@@ -1083,6 +1083,55 @@ class FailedComparisonFakeNestClient(EmptyComparisonFakeNestClient):
         return super().get_json(path, params)
 
 
+class CrossPerformanceComparisonFakeNestClient(FakeNestClient):
+    def __init__(self):
+        self.search_params = []
+
+    def get_json(self, path, params=None):
+        if path == "/theaters":
+            return [{"id": "1", "name": "블루스퀘어 신한카드홀"}]
+        if path == "/musicals":
+            return [
+                {"id": "20", "title": "웃는 남자"},
+                {"id": "21", "title": "팬텀"},
+            ]
+        if path == "/seat-reviews/search":
+            self.search_params.append(dict(params or {}))
+            musical = params.get("musical")
+            season = params.get("seasonLabel")
+            seat_number = params.get("seatNumber")
+            rating = 5 if musical == "웃는 남자" else 3
+            return {
+                "items": [
+                    {
+                        "id": f"{musical}-{seat_number}",
+                        "theater": {"name": "블루스퀘어 신한카드홀"},
+                        "musical": {"title": musical},
+                        "performance": {"seasonLabel": season},
+                        "seat": {
+                            "floor": params.get("seatFloor"),
+                            "section": params.get("seatSection"),
+                            "row": params.get("seatRow"),
+                            "number": seat_number,
+                        },
+                        "ratings": {
+                            "view": rating,
+                            "sound": rating,
+                            "comfort": 4,
+                            "expression": 3,
+                            "stageVisibility": rating,
+                        },
+                        "tags": [],
+                        "content": "선택한 좌석의 실제 관람 후기입니다.",
+                    }
+                ]
+            }
+        return []
+
+    def post_json(self, path, body):
+        raise AssertionError("RAG should not be called for comparison")
+
+
 class SeatAgentServiceTest(unittest.TestCase):
     def test_metadata_failure_keeps_safe_empty_list_fallback(self):
         self.assertEqual(
@@ -1118,6 +1167,86 @@ class SeatAgentServiceTest(unittest.TestCase):
                     {"floor": "1층", "row": "1", "seatNumber": "8"}
                 ],
             )
+
+    def test_different_performances_use_each_seats_review_scope(self):
+        client = CrossPerformanceComparisonFakeNestClient()
+        with patch(
+            "app.services.seat_agent_service.NestClient",
+            return_value=client,
+        ):
+            result = recommend_seat(
+                SeatRecommendationRequest(
+                    question="둘 중 시야와 음향이 더 좋은 좌석은 어디야?",
+                    theaterName="블루스퀘어 신한카드홀",
+                    candidates=[
+                        {
+                            "floor": "1층",
+                            "section": "B",
+                            "row": "8",
+                            "seatNumber": "12",
+                            "musicalTitle": "웃는 남자",
+                            "seasonLabel": "2026",
+                        },
+                        {
+                            "floor": "2층",
+                            "section": "C",
+                            "row": "3",
+                            "seatNumber": "10",
+                            "musicalTitle": "팬텀",
+                            "seasonLabel": "2025",
+                        },
+                    ],
+                    useRag=False,
+                )
+            )
+
+        searched_performances = {
+            (params.get("musical"), params.get("seasonLabel"))
+            for params in client.search_params
+        }
+        self.assertEqual(
+            searched_performances,
+            {("웃는 남자", "2026"), ("팬텀", "2025")},
+        )
+        self.assertIn("웃는 남자", result.recommendation)
+        self.assertIn("팬텀", result.recommendation)
+
+    def test_different_performances_decline_casting_and_role_questions(self):
+        client = CrossPerformanceComparisonFakeNestClient()
+        with patch(
+            "app.services.seat_agent_service.NestClient",
+            return_value=client,
+        ):
+            result = recommend_seat(
+                SeatRecommendationRequest(
+                    question="두 공연의 캐스팅과 배역까지 고려하면 어디가 좋아?",
+                    theaterName="블루스퀘어 신한카드홀",
+                    candidates=[
+                        {
+                            "floor": "1층",
+                            "section": "B",
+                            "row": "8",
+                            "seatNumber": "12",
+                            "musicalTitle": "웃는 남자",
+                            "seasonLabel": "2026",
+                        },
+                        {
+                            "floor": "2층",
+                            "section": "C",
+                            "row": "3",
+                            "seatNumber": "10",
+                            "musicalTitle": "팬텀",
+                            "seasonLabel": "2025",
+                        },
+                    ],
+                    useRag=False,
+                )
+            )
+
+        self.assertEqual(client.search_params, [])
+        self.assertIn("캐스팅이나 배역 정보를 찾지 못했습니다", result.recommendation)
+        self.assertIn("공연이 달라도 비교", result.recommendation)
+        self.assertEqual(result.evidence_reviews, [])
 
     @patch(
         "app.services.seat_agent_service.NestClient",

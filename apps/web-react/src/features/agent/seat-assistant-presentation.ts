@@ -13,18 +13,26 @@ export function buildSeatAssistantRequest(
   seats: PublicSeatReview[],
 ): SeatRecommendationInput {
   const firstSeat = seats[0]
+  const selectedPerformances = new Set(
+    seats.map((seat) => seat.musical.id + ":" + (seat.performance?.id ?? "")),
+  )
+  const comparesDifferentPerformances = selectedPerformances.size > 1
 
   return {
     question: question.trim(),
     theaterName: firstSeat?.theater.name,
-    musicalTitle: firstSeat?.musical.title,
-    seasonLabel: firstSeat?.performance?.seasonLabel ?? undefined,
+    musicalTitle: comparesDifferentPerformances ? undefined : firstSeat?.musical.title,
+    seasonLabel: comparesDifferentPerformances
+      ? undefined
+      : firstSeat?.performance?.seasonLabel ?? undefined,
     candidates: seats.length >= 2
       ? seats.map((seat) => ({
           floor: seat.seat.floor,
           section: seat.seat.section,
           row: seat.seat.row,
           seatNumber: seat.seat.number,
+          musicalTitle: seat.musical.title,
+          seasonLabel: seat.performance?.seasonLabel ?? undefined,
         }))
       : undefined,
     limit: seats.length >= 2 ? 10 : 5,

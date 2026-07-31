@@ -106,6 +106,8 @@ class SeatCandidate:
     side: str | None
     seat_number: str | None = None
     center_core: bool = False
+    musical_title: str | None = None
+    season_label: str | None = None
 
 
 @dataclass
@@ -147,6 +149,10 @@ def recommend_seat(request: SeatRecommendationRequest) -> SeatRecommendationResp
 
     seat_candidates = _request_seat_candidates(request) or _extract_seat_candidates(request.question)
     if len(seat_candidates) >= 2:
+        if _has_mixed_candidate_performances(seat_candidates) and _asks_casting_or_role_info(
+            request.question
+        ):
+            return _build_mixed_performance_casting_notice(filters, mcp_status)
         return _compare_seat_candidates(
             client,
             request,
@@ -309,14 +315,29 @@ def _extract_filters(request: SeatRecommendationRequest, client: NestClient) -> 
 
 def _request_seat_candidates(request: SeatRecommendationRequest) -> list[SeatCandidate]:
     candidates: list[SeatCandidate] = []
+    performance_keys = {
+        (candidate.musical_title or "", candidate.season_label or "")
+        for candidate in request.candidates
+        if candidate.musical_title or candidate.season_label
+    }
+    compares_different_performances = len(performance_keys) > 1
     for candidate in request.candidates:
-        label = " ".join(
+        seat_label = " ".join(
             part
             for part in (
                 candidate.floor,
                 f"{candidate.section}구역" if candidate.section else None,
                 f"{candidate.row}열" if candidate.row else None,
                 f"{candidate.seat_number}번" if candidate.seat_number else None,
+            )
+            if part
+        )
+        label = " ".join(
+            part
+            for part in (
+                candidate.musical_title if compares_different_performances else None,
+                candidate.season_label if compares_different_performances else None,
+                seat_label,
             )
             if part
         )
@@ -328,9 +349,67 @@ def _request_seat_candidates(request: SeatRecommendationRequest) -> list[SeatCan
                 row=candidate.row,
                 side=_section_to_side(candidate.section),
                 seat_number=candidate.seat_number,
+                musical_title=candidate.musical_title,
+                season_label=candidate.season_label,
             )
         )
     return candidates
+
+
+def _has_mixed_candidate_performances(candidates: list[SeatCandidate]) -> bool:
+    performance_keys = {
+        (candidate.musical_title or "", candidate.season_label or "")
+        for candidate in candidates
+        if candidate.musical_title or candidate.season_label
+    }
+    return len(performance_keys) > 1
+
+
+def _asks_casting_or_role_info(question: str) -> bool:
+    if any(
+        keyword in question
+        for keyword in (
+            "캐스팅",
+            "캐스트",
+            "배역",
+            "역할",
+            "출연진",
+            "최애배우",
+            "최애배역",
+        )
+    ):
+        return True
+
+    return bool(
+        re.search(
+            r"(?:누가|누구|어떤|무슨|어느)\s*(?:배우|캐릭터)|"
+            r"(?:배우|캐릭터).{0,8}(?:누가|누구|어떤|무슨|알려|나와|출연)",
+            question,
+        )
+    )
+
+
+def _build_mixed_performance_casting_notice(
+    filters: AgentFilters,
+    mcp_status: str,
+) -> SeatRecommendationResponse:
+    return SeatRecommendationResponse(
+        recommendation=(
+            "선택한 좌석은 같은 극장이지만 서로 다른 공연의 좌석이에요. "
+            "이 비교에서는 캐스팅이나 배역 정보를 찾지 못했습니다. "
+            "좌석 자체의 시야, 음향, 편안함을 기준으로 물어보시면 공연이 달라도 비교해 드릴게요."
+        ),
+        officialSection=None,
+        descriptiveBlock=None,
+        direction="근거 후기 중심",
+        reasons=[],
+        cautions=[],
+        evidenceReviews=[],
+        filters=filters,
+        mcpStatus=mcp_status,
+        ragStatus="skipped",
+        ragAnswer=None,
+    )
 
 
 def _extract_seat_candidates(question: str) -> list[SeatCandidate]:
@@ -631,6 +710,8 @@ def _evaluate_seat_candidate(
 ) -> CandidateEvaluation:
     candidate_filters = base_filters.model_copy(
         update={
+            "musical_title": candidate.musical_title or base_filters.musical_title,
+            "season_label": candidate.season_label or base_filters.season_label,
             "seat_floor": candidate.floor or base_filters.seat_floor,
             "seat_section": candidate.section,
             "seat_row": candidate.row,

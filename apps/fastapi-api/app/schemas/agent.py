@@ -17,8 +17,18 @@ class SeatCandidateRequest(BaseModel):
     section: str | None = None
     row: str = Field(min_length=1)
     seat_number: str = Field(alias="seatNumber", min_length=1)
+    musical_title: str | None = Field(default=None, alias="musicalTitle")
+    season_label: str | None = Field(default=None, alias="seasonLabel")
 
-    @field_validator("floor", "section", "row", "seat_number", mode="before")
+    @field_validator(
+        "floor",
+        "section",
+        "row",
+        "seat_number",
+        "musical_title",
+        "season_label",
+        mode="before",
+    )
     @classmethod
     def strip_seat_parts(cls, value):
         return value.strip() if isinstance(value, str) else value
@@ -47,6 +57,8 @@ class SeatRecommendationRequest(BaseModel):
             tuple(
                 "".join((part or "").split()).upper()
                 for part in (
+                    candidate.musical_title,
+                    candidate.season_label,
                     candidate.floor,
                     candidate.section,
                     candidate.row,

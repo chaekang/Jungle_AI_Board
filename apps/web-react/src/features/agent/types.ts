@@ -52,6 +52,8 @@ export type AgentSeatCandidateInput = {
   section?: string | null
   row: string
   seatNumber: string
+  musicalTitle?: string
+  seasonLabel?: string
 }
 
 export type SeatRecommendationInput = {
