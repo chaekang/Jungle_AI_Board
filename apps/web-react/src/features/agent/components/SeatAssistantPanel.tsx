@@ -53,6 +53,17 @@ export default function SeatAssistantPanel({
     }
   }, [isOpen, messages, isLoading])
 
+  useEffect(() => {
+    if (!isOpen) return
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [isOpen])
+
   async function submitQuestion(question: string) {
     const trimmedQuestion = question.trim()
     if (!trimmedQuestion || isLoading) return
@@ -232,7 +243,7 @@ export default function SeatAssistantPanel({
               value={input}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={handleInputKeyDown}
-              placeholder="예: 블루스퀘어 3층 4열 중블 자리 괜찮아?"
+              placeholder="예: 블루스퀘어 3층 4열 괜찮아?"
               aria-label="좌석 질문"
               rows={1}
             />

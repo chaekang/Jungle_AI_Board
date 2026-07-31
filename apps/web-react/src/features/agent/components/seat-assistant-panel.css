@@ -360,8 +360,14 @@
   gap: 12px;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   padding: 14px 16px;
   background: #ffffff;
+}
+
+.seat-assistant-messages::-webkit-scrollbar {
+  display: none;
 }
 
 .seat-assistant-message {
