@@ -41,6 +41,7 @@ jobs:
       - name: Install dependencies
         run: |
           npm --prefix apps/nest-api ci
+          npm --prefix apps/nest-api exec -- prisma generate --schema=apps/nest-api/prisma/schema.prisma
           npm --prefix apps/web-react ci
           python -m pip install -r apps/fastapi-api/requirements-dev.txt
 
