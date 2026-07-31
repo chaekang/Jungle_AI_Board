@@ -203,7 +203,9 @@ export default function SeatAssistantPanel({
           <div className="seat-assistant-messages" role="log" aria-live="polite">
             {messages.map((message) => (
               <article
-                className={`seat-assistant-message seat-assistant-message--${message.role}`}
+                className={`seat-assistant-message seat-assistant-message--${message.role}${
+                  message.id === "welcome" ? " seat-assistant-message--welcome" : ""
+                }`}
                 key={message.id}
               >
                 <p>{message.text}</p>

@@ -75,6 +75,7 @@ test("chat UI does not expose retrieval internals or replace the composer", () =
   assert.match(source, /AI에게 비교 질문하기/)
   assert.match(source, /disabled=\{comparisonSeats\.length < 2\}/)
 })
+
 test("review cards describe comparison as a seat-selection action", () => {
   const source = readFileSync(
     new URL("../reviews/components/SeatReviewCard.tsx", import.meta.url),
@@ -84,4 +85,20 @@ test("review cards describe comparison as a seat-selection action", () => {
   assert.match(source, /비교할 좌석 선택/)
   assert.match(source, /비교 좌석 선택됨/)
   assert.doesNotMatch(source, /비교함에 담기/)
+})
+
+test("chat layout keeps the conversation flexible and the composer anchored", () => {
+  const component = readFileSync(
+    new URL("./components/SeatAssistantPanel.tsx", import.meta.url),
+    "utf8",
+  )
+  const styles = readFileSync(
+    new URL("./components/seat-assistant-panel.css", import.meta.url),
+    "utf8",
+  )
+
+  assert.match(component, /message\.id === "welcome"/)
+  assert.match(styles, /\.seat-assistant-messages \{\s+grid-area: messages;/)
+  assert.match(styles, /\.seat-assistant-composer \{\s+grid-area: composer;/)
+  assert.match(styles, /grid-template-rows: auto auto minmax\(0, 1fr\) auto auto;/)
 })
