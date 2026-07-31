@@ -315,12 +315,6 @@ def _extract_filters(request: SeatRecommendationRequest, client: NestClient) -> 
 
 def _request_seat_candidates(request: SeatRecommendationRequest) -> list[SeatCandidate]:
     candidates: list[SeatCandidate] = []
-    performance_keys = {
-        (candidate.musical_title or "", candidate.season_label or "")
-        for candidate in request.candidates
-        if candidate.musical_title or candidate.season_label
-    }
-    compares_different_performances = len(performance_keys) > 1
     for candidate in request.candidates:
         seat_label = " ".join(
             part
@@ -332,18 +326,9 @@ def _request_seat_candidates(request: SeatRecommendationRequest) -> list[SeatCan
             )
             if part
         )
-        label = " ".join(
-            part
-            for part in (
-                candidate.musical_title if compares_different_performances else None,
-                candidate.season_label if compares_different_performances else None,
-                seat_label,
-            )
-            if part
-        )
         candidates.append(
             SeatCandidate(
-                label=label or "선택 좌석",
+                label=seat_label or "선택 좌석",
                 floor=candidate.floor,
                 section=candidate.section,
                 row=candidate.row,
@@ -1641,7 +1626,8 @@ def _build_candidate_comparison_answer(
         for evaluation in evaluations
         if evaluation.candidate.label != winner.candidate.label
     ]
-    intro = f"둘 중에서는 {winner.candidate.label}을 추천합니다."
+    comparison_subject = "둘 중에서는" if len(evaluations) == 2 else "선택한 좌석 중에서는"
+    intro = f"{comparison_subject} {_quoted_candidate_label(winner.candidate)}을 추천합니다."
     focus_subject = _extract_focus_subject(question)
     has_focus_context = _has_focus_context(question)
 
@@ -1680,15 +1666,16 @@ def _build_floor_comparison_answer(
     ]
     other = others[0] if others else None
 
+    comparison_subject = "둘 중에서는" if len(evaluations) == 2 else "선택한 좌석 중에서는"
     parts = [
-        f"둘 중에서는 {winner.candidate.label}을 추천합니다.",
+        f"{comparison_subject} {_quoted_candidate_label(winner.candidate)}을 추천합니다.",
         f"시야는 {_floor_view_phrase(winner)}.",
         f"자리는 {_floor_seat_phrase(winner)}.",
         f"음향은 {_floor_sound_phrase(winner)}.",
     ]
 
     if other:
-        parts.append(f"{other.candidate.label}은 {_floor_tradeoff_phrase(other)}.")
+        parts.append(f"{_quoted_candidate_label(other.candidate)}은 {_floor_tradeoff_phrase(other)}.")
 
     return " ".join(parts)
 
@@ -1739,9 +1726,14 @@ def _floor_tradeoff_phrase(evaluation: CandidateEvaluation) -> str:
     return "장점은 있지만 이번 비교에서는 우선순위가 조금 낮습니다"
 
 
+def _quoted_candidate_label(candidate: SeatCandidate) -> str:
+    return f"'{candidate.label}'"
+
+
 def _candidate_tradeoff_summary(evaluation: CandidateEvaluation) -> str:
     return (
-        f"{evaluation.candidate.label}{_topic_particle(evaluation.candidate.label)} "
+        f"{_quoted_candidate_label(evaluation.candidate)}"
+        f"{_topic_particle(evaluation.candidate.label)} "
         f"장점은 {_candidate_advantage_phrase(evaluation)}. "
         f"단점은 {_candidate_downside_phrase(evaluation)}."
     )
@@ -1825,7 +1817,7 @@ def _build_candidate_comparison_abstention(
     evaluations: list[CandidateEvaluation],
 ) -> str:
     missing_labels = [
-        evaluation.candidate.label
+        _quoted_candidate_label(evaluation.candidate)
         for evaluation in evaluations
         if evaluation.search_scope.exact_count == 0
     ]

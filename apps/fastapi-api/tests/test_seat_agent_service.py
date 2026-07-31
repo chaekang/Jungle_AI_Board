@@ -1195,6 +1195,14 @@ class SeatAgentServiceTest(unittest.TestCase):
                             "musicalTitle": "팬텀",
                             "seasonLabel": "2025",
                         },
+                        {
+                            "floor": "1층",
+                            "section": "E",
+                            "row": "6",
+                            "seatNumber": "36",
+                            "musicalTitle": "레미제라블",
+                            "seasonLabel": "2025",
+                        },
                     ],
                     useRag=False,
                 )
@@ -1206,10 +1214,19 @@ class SeatAgentServiceTest(unittest.TestCase):
         }
         self.assertEqual(
             searched_performances,
-            {("웃는 남자", "2026"), ("팬텀", "2025")},
+            {
+                ("웃는 남자", "2026"),
+                ("팬텀", "2025"),
+                ("레미제라블", "2025"),
+            },
         )
-        self.assertIn("웃는 남자", result.recommendation)
-        self.assertIn("팬텀", result.recommendation)
+        self.assertIn("선택한 좌석 중에서는", result.recommendation)
+        self.assertNotIn("웃는 남자", result.recommendation)
+        self.assertNotIn("팬텀", result.recommendation)
+        self.assertNotIn("레미제라블", result.recommendation)
+        self.assertIn("'1층 B구역 8열 12번'", result.recommendation)
+        self.assertIn("'2층 C구역 3열 10번'", result.recommendation)
+        self.assertIn("'1층 E구역 6열 36번'", result.recommendation)
 
     def test_different_performances_decline_casting_and_role_questions(self):
         client = CrossPerformanceComparisonFakeNestClient()
@@ -1583,7 +1600,7 @@ class SeatAgentServiceTest(unittest.TestCase):
         self.assertIn("장점", result.recommendation)
         self.assertIn("단점", result.recommendation)
         self.assertIn("무대가 넓", result.recommendation)
-        self.assertIn("1열 극싸는", result.recommendation)
+        self.assertIn("'1열 극싸'는", result.recommendation)
         self.assertNotIn("극싸은", result.recommendation)
         self.assertNotIn("점.", result.recommendation)
         self.assertNotEqual(result.recommendation, "D구역 왼쪽블록 위주로 보는 편이 좋습니다.")
