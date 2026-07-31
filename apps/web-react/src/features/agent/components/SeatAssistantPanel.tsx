@@ -94,6 +94,7 @@ export default function SeatAssistantPanel({
   async function submitQuestion(question: string) {
     const trimmedQuestion = question.trim()
     if (!trimmedQuestion || isLoading) return
+    const shouldClearComparison = comparisonSeats.length >= 2
 
     setMessages((current) => [
       ...current,
@@ -111,6 +112,9 @@ export default function SeatAssistantPanel({
         ...current,
         { id: makeMessageId(), role: "assistant", text: getAssistantReply(result) },
       ])
+      if (shouldClearComparison) {
+        onClearComparison?.()
+      }
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
