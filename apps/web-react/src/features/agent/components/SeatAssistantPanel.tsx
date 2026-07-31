@@ -44,10 +44,12 @@ export default function SeatAssistantPanel({
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const messageEndRef = useRef<HTMLDivElement | null>(null)
+  const composerRef = useRef<HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
     if (isOpen) {
       messageEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
+      composerRef.current?.focus()
     }
   }, [isOpen, messages, isLoading])
 
@@ -110,6 +112,50 @@ export default function SeatAssistantPanel({
           </small>
         ) : null}
       </button>
+
+      {!isOpen && comparisonSeats.length ? (
+        <aside className="seat-comparison-tray" aria-label="선택한 비교 좌석" aria-live="polite">
+          <div className="seat-comparison-tray-summary">
+            <span aria-hidden="true">VS</span>
+            <div>
+              <small>좌석 비교 {comparisonSeats.length}/3</small>
+              <strong>
+                {comparisonSeats.length < 2
+                  ? "비교할 좌석을 하나 더 골라주세요"
+                  : "선택한 좌석을 AI에게 바로 물어보세요"}
+              </strong>
+            </div>
+          </div>
+
+          <div className="seat-comparison-tray-seats">
+            {comparisonSeats.map((seat) => (
+              <button
+                key={getComparisonSeatKey(seat)}
+                type="button"
+                aria-label={`${getSeatLabel(seat)} 비교 선택 해제`}
+                onClick={() => onRemoveComparisonSeat?.(seat)}
+              >
+                <span>{getSeatLabel(seat)}</span>
+                <b aria-hidden="true">×</b>
+              </button>
+            ))}
+          </div>
+
+          {comparisonMessage ? <p role="status">{comparisonMessage}</p> : null}
+
+          <div className="seat-comparison-tray-actions">
+            <button type="button" onClick={onClearComparison}>초기화</button>
+            <button
+              className="seat-comparison-tray-start"
+              type="button"
+              disabled={comparisonSeats.length < 2}
+              onClick={() => setIsOpen(true)}
+            >
+              {comparisonSeats.length < 2 ? "한 자리 더 선택" : "AI에게 비교 질문하기"}
+            </button>
+          </div>
+        </aside>
+      ) : null}
 
       {isOpen ? (
         <section className="seat-assistant-chat" aria-label="AI 좌석 도우미">
@@ -180,6 +226,7 @@ export default function SeatAssistantPanel({
 
           <form className="seat-assistant-composer" onSubmit={handleSubmit}>
             <textarea
+              ref={composerRef}
               value={input}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={handleInputKeyDown}

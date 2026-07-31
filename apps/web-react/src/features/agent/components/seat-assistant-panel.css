@@ -48,11 +48,164 @@
 
 .seat-assistant-launcher:focus-visible,
 .seat-assistant-chat button:focus-visible,
+.seat-comparison-tray button:focus-visible,
 .seat-assistant-chat textarea:focus-visible {
   outline: 3px solid rgba(111, 29, 42, 0.18);
   outline-offset: 3px;
 }
 
+.seat-comparison-tray {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 79;
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  width: min(820px, calc(100vw - 180px));
+  border: 1px solid #dfcdd1;
+  border-left: 4px solid #6f1d2a;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 20px 58px rgba(52, 23, 29, 0.18);
+  padding: 12px 14px;
+  transform: translateX(-50%);
+  animation: seat-comparison-tray-enter 0.22s ease-out both;
+  backdrop-filter: blur(14px);
+}
+
+.seat-comparison-tray-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 222px;
+}
+
+.seat-comparison-tray-summary > span {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #6f1d2a;
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+}
+
+.seat-comparison-tray-summary > div {
+  display: grid;
+  gap: 2px;
+}
+
+.seat-comparison-tray-summary small {
+  color: #8a5964;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.seat-comparison-tray-summary strong {
+  color: #32161c;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.seat-comparison-tray-seats {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.seat-comparison-tray-seats button {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #eadde0;
+  border-radius: 999px;
+  background: #fffafa;
+  color: #5d2632;
+  padding: 6px 8px 6px 10px;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.seat-comparison-tray-seats button:hover {
+  border-color: #cda7af;
+  background: #ffffff;
+}
+
+.seat-comparison-tray-seats span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seat-comparison-tray-seats b {
+  font-size: 0.88rem;
+  line-height: 1;
+}
+
+.seat-comparison-tray > p {
+  grid-column: 1 / -1;
+  margin: -4px 0 0 46px;
+  color: #943d4d;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.seat-comparison-tray-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.seat-comparison-tray-actions button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #765f64;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 850;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.seat-comparison-tray-actions .seat-comparison-tray-start {
+  background: #6f1d2a;
+  color: #ffffff;
+  padding-inline: 15px;
+}
+
+.seat-comparison-tray-actions .seat-comparison-tray-start:hover:not(:disabled) {
+  background: #5d1521;
+  transform: translateY(-1px);
+}
+
+.seat-comparison-tray-actions .seat-comparison-tray-start:disabled {
+  background: #eadde0;
+  color: #8f747a;
+  cursor: not-allowed;
+}
+
+@keyframes seat-comparison-tray-enter {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@keyframes seat-comparison-tray-enter-mobile {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 .seat-assistant-chat {
   position: fixed;
   right: max(24px, calc((100vw - 980px) / 2 - 86px));
@@ -326,16 +479,50 @@
     bottom: 22px;
   }
 
+  .seat-comparison-tray {
+    right: 12px;
+    bottom: 92px;
+    left: 12px;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    width: auto;
+    max-height: calc(100vh - 118px);
+    overflow-y: auto;
+    transform: none;
+    animation: seat-comparison-tray-enter-mobile 0.22s ease-out both;
+  }
+
+  .seat-comparison-tray-summary {
+    min-width: 0;
+  }
+
+  .seat-comparison-tray > p {
+    margin: 0;
+  }
+
+  .seat-comparison-tray-actions {
+    justify-content: stretch;
+  }
+
+  .seat-comparison-tray-actions .seat-comparison-tray-start {
+    flex: 1;
+  }
+
   .seat-assistant-chat {
     right: 12px;
     bottom: 92px;
-    width: calc(100vw - 24px);
+    left: 12px;
+    width: auto;
     max-height: calc(100vh - 118px);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .seat-assistant-typing span {
+    animation: none;
+  }
+
+  .seat-comparison-tray {
     animation: none;
   }
 }

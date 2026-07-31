@@ -115,12 +115,13 @@ export default function SeatReviewCard({
               className="board-review-compare-button"
               type="button"
               aria-pressed={isInComparison}
+              aria-label={isInComparison ? "비교 좌석 선택 해제" : "비교할 좌석 선택"}
               onClick={(event) => {
                 event.stopPropagation()
                 onToggleComparison(review)
               }}
             >
-              {isInComparison ? "비교함에서 빼기" : "비교함에 담기"}
+              {isInComparison ? "비교 좌석 선택됨" : "비교할 좌석 선택"}
             </button>
           ) : null}
           {onReport ? (

@@ -71,4 +71,17 @@ test("chat UI does not expose retrieval internals or replace the composer", () =
   assert.doesNotMatch(source, /후기 기반 비교 요약/)
   assert.doesNotMatch(source, /요약에 사용한 원문 후기/)
   assert.doesNotMatch(source, /!comparisonSeats\.length\s*\?\s*<form/)
+  assert.match(source, /seat-comparison-tray/)
+  assert.match(source, /AI에게 비교 질문하기/)
+  assert.match(source, /disabled=\{comparisonSeats\.length < 2\}/)
+})
+test("review cards describe comparison as a seat-selection action", () => {
+  const source = readFileSync(
+    new URL("../reviews/components/SeatReviewCard.tsx", import.meta.url),
+    "utf8",
+  )
+
+  assert.match(source, /비교할 좌석 선택/)
+  assert.match(source, /비교 좌석 선택됨/)
+  assert.doesNotMatch(source, /비교함에 담기/)
 })

@@ -337,8 +337,8 @@ export default function TheaterSeatMap({
               <div className="theater-seat-map-modal-actions">
                 <button type="button" onClick={() => onToggleComparison(selectedReviews[0])}>
                   {hasComparisonSeat(comparisonSeats, selectedReviews[0])
-                    ? "비교함에서 빼기"
-                    : "이 좌석 비교함에 담기"}
+                    ? "비교 좌석 선택됨"
+                    : "비교할 좌석으로 선택"}
                 </button>
                 <button type="button" onClick={() => setSelectedSeatKey(null)}>
                   닫기

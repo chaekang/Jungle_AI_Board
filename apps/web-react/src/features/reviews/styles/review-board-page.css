@@ -1416,18 +1416,41 @@
 }
 
 .board-review-compare-button {
+  display: inline-flex;
   min-height: 28px;
+  align-items: center;
+  gap: 6px;
   margin-left: auto;
   border: 1px solid #6f1d2a;
   border-radius: 999px;
   background: #ffffff;
   color: #6f1d2a;
-  padding: 3px 10px;
+  padding: 3px 11px 3px 8px;
   font: inherit;
   font-size: 0.72rem;
   font-weight: 850;
   cursor: pointer;
   transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.board-review-compare-button::before {
+  content: "+";
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #f5e9eb;
+  color: #6f1d2a;
+  font-size: 0.76rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.board-review-compare-button[aria-pressed="true"]::before {
+  content: "✓";
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
 }
 
 .board-review-compare-button:hover,
