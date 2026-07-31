@@ -21,7 +21,7 @@ services:
 
   nest-api:
     env_file:
-      - ./apps/nest-api/.env
+      - ${NEST_ENV_FILE:-./apps/nest-api/.env}
     build:
       context: ./apps/nest-api
     container_name: jungle-ai-board-nest-api

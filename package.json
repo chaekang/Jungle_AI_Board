@@ -16,7 +16,7 @@
     "web:lint": "npm --prefix apps/web-react run lint",
     "web:test": "npm --prefix apps/web-react run test",
     "fastapi:test": "cd apps/fastapi-api && python -m pytest tests -p no:cacheprovider",
-    "test": "npm run nest:test -- --runInBand && npm run web:test && npm run fastapi:test",
+    "test": "npm --prefix apps/nest-api run test -- --runInBand && npm run web:test && npm run fastapi:test",
     "build": "npm run nest:build && npm run web:build",
     "compose:build": "docker compose -f docker-compose.yml build",
     "compose:up": "docker compose -f docker-compose.yml up -d --build",

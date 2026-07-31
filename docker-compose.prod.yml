@@ -1,0 +1,22 @@
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    container_name: jungle-ai-board-caddy
+    restart: unless-stopped
+    depends_on:
+      web-react:
+        condition: service_healthy
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN must be set}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:
