@@ -1026,7 +1026,17 @@
   background: rgba(52, 23, 29, 0.24);
 }
 
+.theater-seat-map-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
 .theater-seat-map-modal-card {
+  position: relative;
+  z-index: 1;
   width: min(720px, 100%);
   max-height: min(80svh, 720px);
   overflow: auto;

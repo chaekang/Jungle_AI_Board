@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import type { FormEvent, KeyboardEvent } from "react"
+import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from "react"
 import type { PublicSeatReview } from "../../reviews/types"
 import { askSeatRecommendation } from "../api"
 import { getComparisonSeatKey, getSeatLabel } from "../seat-comparison"
@@ -45,6 +45,8 @@ export default function SeatAssistantPanel({
   const [error, setError] = useState("")
   const messageEndRef = useRef<HTMLDivElement | null>(null)
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
+  const launcherRef = useRef<HTMLButtonElement | null>(null)
+  const chatRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     if (isOpen) {
@@ -61,6 +63,31 @@ export default function SeatAssistantPanel({
 
     return () => {
       document.body.style.overflow = previousOverflow
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (chatRef.current?.contains(target) || launcherRef.current?.contains(target)) return
+      setIsOpen(false)
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return
+      setIsOpen(false)
+      launcherRef.current?.focus()
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown)
+    document.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown)
+      document.removeEventListener("keydown", handleKeyDown)
     }
   }, [isOpen])
 
@@ -100,7 +127,7 @@ export default function SeatAssistantPanel({
     void submitQuestion(input)
   }
 
-  function handleInputKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+  function handleInputKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault()
       void submitQuestion(input)
@@ -110,6 +137,7 @@ export default function SeatAssistantPanel({
   return (
     <>
       <button
+        ref={launcherRef}
         className="seat-assistant-launcher"
         type="button"
         aria-label={isOpen ? "AI 좌석 도우미 닫기" : "AI 좌석 도우미 열기"}
@@ -169,7 +197,7 @@ export default function SeatAssistantPanel({
       ) : null}
 
       {isOpen ? (
-        <section className="seat-assistant-chat" aria-label="AI 좌석 도우미">
+        <section ref={chatRef} className="seat-assistant-chat" aria-label="AI 좌석 도우미">
           <header className="seat-assistant-chat-header">
             <div>
               <p>AI 좌석 도우미</p>

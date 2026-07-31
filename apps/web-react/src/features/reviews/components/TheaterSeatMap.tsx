@@ -331,6 +331,12 @@ export default function TheaterSeatMap({
 
       {selectedReviews.length > 0 ? (
         <div className="theater-seat-map-modal" role="dialog" aria-modal="true">
+          <button
+            className="theater-seat-map-modal-backdrop"
+            type="button"
+            aria-label="좌석 후기 닫기"
+            onClick={() => setSelectedSeatKey(null)}
+          />
           <div className="theater-seat-map-modal-card">
             <header>
               <h2>좌석 후기</h2>
