@@ -120,8 +120,10 @@ class CandidateEvaluation:
     score: float
 
 
-def recommend_seat(request: SeatRecommendationRequest) -> SeatRecommendationResponse:
-    client = NestClient()
+def recommend_seat(
+    request: SeatRecommendationRequest, client_ip: str | None = None
+) -> SeatRecommendationResponse:
+    client = NestClient(forwarded_for=client_ip)
     filters = _extract_filters(request, client)
     external_production = _resolve_external_musical_production(request, filters)
     if external_production and not filters.theater_name:

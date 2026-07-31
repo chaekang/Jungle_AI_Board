@@ -11,9 +11,10 @@ class NestClientError(RuntimeError):
 
 
 class NestClient:
-    def __init__(self) -> None:
+    def __init__(self, forwarded_for: str | None = None) -> None:
         self.base_url = os.getenv("NEST_API_BASE_URL", "http://localhost:3000").strip().rstrip("/")
         self.timeout = float(os.getenv("NEST_API_TIMEOUT_SECONDS", "8"))
+        self.forwarded_for = forwarded_for
 
     def get_json(self, path: str, params: dict[str, object | None] | None = None):
         query = _clean_params(params or {})
@@ -25,11 +26,14 @@ class NestClient:
 
     def _request(self, method: str, path: str, body: dict[str, object] | None = None):
         data = json.dumps(body).encode("utf-8") if body is not None else None
+        headers = {"Content-Type": "application/json"}
+        if self.forwarded_for:
+            headers["X-Forwarded-For"] = self.forwarded_for
         request = Request(
             f"{self.base_url}{path}",
             data=data,
             method=method,
-            headers={"Content-Type": "application/json"},
+            headers=headers,
         )
 
         try:
